@@ -34,7 +34,7 @@ const UploadSection = ({ onImageUpload }) => {
 
   const handleAnalyze = () => {
     if (uploadedFile) {
-      onImageUpload(preview);
+      onImageUpload(uploadedFile, preview);
     }
   };
 

@@ -15,33 +15,53 @@ function App() {
   const [analysisResults, setAnalysisResults] = useState(null);
   const [redesignedImage, setRedesignedImage] = useState(null);
 
-  const handleImageUpload = (image) => {
-    setUploadedImage(image);
+  const handleImageUpload = async (file, preview) => {
+    setUploadedImage(preview);
     setCurrentSection('analysis');
     
-    // Simulate AI analysis
-    setTimeout(() => {
-      const mockResults = {
-        colorImprovements: [
-          { issue: 'Low contrast between text and background', suggestion: 'Increase text brightness to #ffffff' },
-          { issue: 'Inconsistent color palette', suggestion: 'Use a consistent primary color: #667eea' }
-        ],
-        spacingIssues: [
-          { issue: 'Insufficient padding between elements', suggestion: 'Add 16px padding between components' },
-          { issue: 'Uneven margins', suggestion: 'Standardize margins to 24px' }
-        ],
-        typographyFixes: [
-          { issue: 'Inconsistent font sizes', suggestion: 'Use 16px for body text, 24px for headings' },
-          { issue: 'Poor line height', suggestion: 'Set line-height to 1.6 for better readability' }
-        ],
-        uxSuggestions: [
-          { issue: 'Missing hover states', suggestion: 'Add hover effects to interactive elements' },
-          { issue: 'Unclear call-to-action', suggestion: 'Make primary buttons more prominent' }
-        ]
-      };
-      setAnalysisResults(mockResults);
-      setCurrentSection('results');
-    }, 3000);
+    try {
+      // 1. Upload the image
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const uploadResponse = await fetch('http://localhost:5000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!uploadResponse.ok) {
+        throw new Error('Upload failed. Please ensure the backend is running.');
+      }
+      
+      const uploadData = await uploadResponse.json();
+      const imageId = uploadData.data.id;
+      
+      // 2. Perform analysis
+      const analysisResponse = await fetch('http://localhost:5000/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageId, analysisType: 'detailed' }),
+      });
+      
+      if (!analysisResponse.ok) {
+        throw new Error('Analysis failed. Please try again.');
+      }
+      
+      const analysisData = await analysisResponse.json();
+      
+      // Give a small delay to allow the animation to feel natural
+      setTimeout(() => {
+        setAnalysisResults(analysisData.data.suggestions);
+        setCurrentSection('results');
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error during analysis:', error);
+      alert(error.message || 'Something went wrong. Is the backend server running?');
+      setCurrentSection('upload');
+    }
   };
 
   const handleRedesign = () => {
