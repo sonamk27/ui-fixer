@@ -15,6 +15,8 @@ import ChangeTracker from './ChangeTracker';
 import ModificationOverlay from './ModificationOverlay';
 import { changeTracker as changeTrackerUtil } from '../utils/changeTracking';
 
+const API_BASE_URL = 'http://localhost:5001';
+
 const ComparisonSection = ({ originalImage, redesignedImage, analysisResults, onReset }) => {
   const [viewMode, setViewMode] = useState('slider');
   const [sliderPosition, setSliderPosition] = useState(50);
@@ -50,7 +52,7 @@ const ComparisonSection = ({ originalImage, redesignedImage, analysisResults, on
     setIsRegenerating(true);
     
     try {
-      const response = await fetch('http://localhost:5000/api/regeneration', {
+      const response = await fetch(`${API_BASE_URL}/api/regeneration`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

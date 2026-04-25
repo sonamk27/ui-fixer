@@ -8,6 +8,8 @@ import ChatAssistant from './components/ChatAssistant';
 import Navigation from './components/Navigation';
 import './index.css';
 
+const API_BASE_URL = 'http://localhost:5001';
+
 function App() {
   const [currentSection, setCurrentSection] = useState('landing');
   const [uploadedImage, setUploadedImage] = useState(null);
@@ -24,12 +26,12 @@ function App() {
 
       let uploadResponse;
       try {
-        uploadResponse = await fetch('http://localhost:5000/api/upload', {
+        uploadResponse = await fetch(`${API_BASE_URL}/api/upload`, {
           method: 'POST',
           body: formData,
         });
       } catch (networkErr) {
-        throw new Error('Cannot reach the backend server at localhost:5000. Make sure it is running with "npm run dev" in the /backend folder.');
+        throw new Error(`Cannot reach the backend server at ${API_BASE_URL}. Make sure it is running with "npm run dev" in the /backend folder.`);
       }
 
       if (!uploadResponse.ok) {
@@ -51,7 +53,7 @@ function App() {
       console.log('Upload successful, imageId:', imageId);
 
       // 2. Perform analysis
-      const analysisResponse = await fetch('http://localhost:5000/api/analyze', {
+      const analysisResponse = await fetch(`${API_BASE_URL}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId, analysisType: 'detailed' }),

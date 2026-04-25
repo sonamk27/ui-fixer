@@ -44,18 +44,28 @@ app.use(helmet({
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
+    // Allow all localhost origins for development
+    if (!origin) return callback(null, true);
+    
+    // Allow any localhost or 127.0.0.1 origin
+    if (origin.includes('localhost:') || origin.includes('127.0.0.1:')) {
+      console.log(`CORS: Allowing origin: ${origin}`);
+      return callback(null, true);
+    }
+    
+    // Specific allowed origins
     const allowedOrigins = [
       process.env.FRONTEND_URL || 'http://localhost:3000',
       'http://localhost:3000',
       'http://127.0.0.1:3000'
     ];
     
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    console.log(`CORS: Checking origin: ${origin}`);
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log(`CORS: Rejected origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -141,7 +151,7 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
