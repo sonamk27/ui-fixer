@@ -15,7 +15,7 @@ import ChangeTracker from './ChangeTracker';
 import ModificationOverlay from './ModificationOverlay';
 import { changeTracker as changeTrackerUtil } from '../utils/changeTracking';
 
-const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
+const ComparisonSection = ({ originalImage, redesignedImage, analysisResults, onReset }) => {
   const [viewMode, setViewMode] = useState('slider');
   const [sliderPosition, setSliderPosition] = useState(50);
   const [showHighlights, setShowHighlights] = useState(true);
@@ -133,12 +133,49 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const improvements = [
-    { area: 'Header', type: 'color', description: 'Improved contrast and readability' },
-    { area: 'Buttons', type: 'spacing', description: 'Better padding and hover states' },
-    { area: 'Typography', type: 'typography', description: 'Enhanced font hierarchy' },
-    { area: 'Layout', type: 'spacing', description: 'Optimized white space' }
-  ];
+  const handleDownload = () => {
+    const downloadUrl = redesignedImage?.download || redesignedImage;
+    if (!downloadUrl) return;
+    
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `redesigned-ui-fixed-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Map analysis results to improvements array
+  const improvements = [];
+  if (analysisResults) {
+    const mapItems = (items, type, baseTop) => {
+      if (!items || !Array.isArray(items)) return;
+      items.forEach((item, index) => {
+        improvements.push({
+          area: item.issue.split(' ')[0] || type,
+          type: type,
+          description: item.suggestion,
+          top: `${(baseTop + (index * 15))}%`,
+          left: `${(8 + index * 5)}%`,
+          width: '40%',
+          height: '12%'
+        });
+      });
+    };
+
+    mapItems(analysisResults.colorImprovements, 'color', 12);
+    mapItems(analysisResults.spacingIssues, 'spacing', 35);
+    mapItems(analysisResults.typographyFixes, 'typography', 55);
+    mapItems(analysisResults.layoutProblems, 'layout', 72);
+  } else {
+    // Fallback if no results
+    improvements.push(
+      { area: 'Header', type: 'color', description: 'Improved contrast & readability', top: '8%', left: '10%', width: '80%', height: '18%' },
+      { area: 'Buttons', type: 'spacing', description: 'Better padding & hover states', top: '55%', left: '15%', width: '30%', height: '14%' },
+      { area: 'Typography', type: 'typography', description: 'Enhanced font hierarchy', top: '35%', left: '10%', width: '60%', height: '12%' },
+      { area: 'Layout', type: 'layout', description: 'Optimized white space & alignment', top: '72%', left: '10%', width: '80%', height: '20%' }
+    );
+  }
 
   // Get dynamic improvements from applied changes
   const getAppliedImprovements = () => {
@@ -239,9 +276,9 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
                 transition={{ duration: 0.3 }}
               >
                 <div
-                  className="relative rounded-xl overflow-hidden cursor-ew-resize"
+                  className="relative rounded-xl overflow-hidden cursor-ew-resize bg-dark-surface"
                   onMouseMove={handleSliderMove}
-                  style={{ height: '500px' }}
+                  style={{ height: '600px' }}
                 >
                   {/* Original image (left side) */}
                   <div
@@ -251,7 +288,7 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
                     <img
                       src={originalImage}
                       alt="Original design"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                     <div className="absolute top-4 left-4 px-3 py-1 rounded-full glass-dark border border-white/10">
                       <span className="text-xs text-gray-300">Before</span>
@@ -264,9 +301,9 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
                     style={{ clipPath: `inset(0 0 0 ${sliderPosition}%)` }}
                   >
                     <img
-                      src={redesignedImage}
+                      src={redesignedImage?.preview || redesignedImage}
                       alt="Redesigned UI"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                     <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-green-500/20 border border-green-500/30">
                       <span className="text-xs text-green-400">After</span>
@@ -278,25 +315,6 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
                         appliedChanges={appliedChanges} 
                         imageDimensions={{ width: '100%', height: '100%' }}
                       />
-                    )}
-
-                    {/* Improvement highlights */}
-                    {showHighlights && !modificationsApplied && (
-                      <div className="absolute inset-0 pointer-events-none">
-                        {improvements.map((improvement, index) => (
-                          <motion.div
-                            key={index}
-                            className="absolute w-16 h-16 border-2 border-green-400 rounded-lg animate-pulse"
-                            style={{
-                              top: `${20 + index * 15}%`,
-                              right: `${10 + index * 8}%`
-                            }}
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 0.5 + index * 0.1 }}
-                          />
-                        ))}
-                      </div>
                     )}
                   </div>
 
@@ -321,11 +339,11 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
                 transition={{ duration: 0.3 }}
               >
                 {/* Before */}
-                <div className="relative rounded-xl overflow-hidden">
+                <div className="relative rounded-xl overflow-hidden bg-dark-surface">
                   <img
                     src={originalImage}
                     alt="Original design"
-                    className="w-full h-96 object-cover"
+                    className="w-full h-[500px] object-contain"
                   />
                   <div className="absolute top-4 left-4 px-3 py-1 rounded-full glass-dark border border-white/10">
                     <span className="text-xs text-gray-300">Before</span>
@@ -333,11 +351,11 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
                 </div>
 
                 {/* After */}
-                <div className="relative rounded-xl overflow-hidden">
+                <div className="relative rounded-xl overflow-hidden bg-dark-surface">
                   <img
-                    src={redesignedImage}
+                    src={redesignedImage?.preview || redesignedImage}
                     alt="Redesigned UI"
-                    className="w-full h-96 object-cover"
+                    className="w-full h-[500px] object-contain"
                   />
                   <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-green-500/20 border border-green-500/30">
                     <span className="text-xs text-green-400">After</span>
@@ -349,25 +367,6 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
                       appliedChanges={appliedChanges} 
                       imageDimensions={{ width: '100%', height: '100%' }}
                     />
-                  )}
-
-                  {/* Improvement highlights */}
-                  {showHighlights && !modificationsApplied && (
-                    <div className="absolute inset-0 pointer-events-none">
-                      {improvements.map((improvement, index) => (
-                        <motion.div
-                          key={index}
-                          className="absolute w-12 h-12 border-2 border-green-400 rounded-lg animate-pulse"
-                          style={{
-                            top: `${20 + index * 15}%`,
-                            left: `${10 + index * 8}%`
-                          }}
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ delay: 0.5 + index * 0.1 }}
-                        />
-                      ))}
-                    </div>
                   )}
                 </div>
               </motion.div>
@@ -510,6 +509,7 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
           </motion.button>
 
           <motion.button
+            onClick={handleDownload}
             className="px-8 py-4 glass-dark rounded-xl font-semibold border border-white/10 hover:border-purple-500/30 transition-all duration-300"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -529,6 +529,40 @@ const ComparisonSection = ({ originalImage, redesignedImage, onReset }) => {
           </motion.button>
         </motion.div>
       </motion.div>
+
+      {/* Floating Action Bar for Unapplied Changes */}
+      <AnimatePresence>
+        {Object.keys(appliedChanges).length > 0 && !modificationsApplied && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 50, x: '-50%' }}
+            className="fixed bottom-8 left-1/2 z-50 flex flex-col md:flex-row items-center gap-4 px-6 py-4 glass-dark rounded-2xl border border-purple-500/50 shadow-[0_0_30px_rgba(168,85,247,0.3)] backdrop-blur-xl"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center animate-pulse">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-white">Unapplied Changes Detected</p>
+                <p className="text-sm text-gray-300">Regenerate the image to see your updates.</p>
+              </div>
+            </div>
+            <button
+              onClick={handleRegenerate}
+              disabled={isRegenerating}
+              className="ml-0 md:ml-4 px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2"
+            >
+              {isRegenerating ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <RotateCcw className="w-4 h-4" />
+              )}
+              {isRegenerating ? 'Regenerating...' : 'Regenerate Now'}
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 };

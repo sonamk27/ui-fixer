@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import LandingSection from './components/LandingSection';
 import UploadSection from './components/UploadSection';
 import AnalysisSection from './components/AnalysisSection';
-import ResultsDashboard from './components/ResultsDashboard';
-import ComparisonSection from './components/ComparisonSection';
+import Dashboard from './components/Dashboard';
 import ChatAssistant from './components/ChatAssistant';
 import Navigation from './components/Navigation';
 import './index.css';
@@ -12,71 +11,81 @@ import './index.css';
 function App() {
   const [currentSection, setCurrentSection] = useState('landing');
   const [uploadedImage, setUploadedImage] = useState(null);
-  const [analysisResults, setAnalysisResults] = useState(null);
-  const [redesignedImage, setRedesignedImage] = useState(null);
+  const [analysisData, setAnalysisData] = useState(null);
 
   const handleImageUpload = async (file, preview) => {
     setUploadedImage(preview);
     setCurrentSection('analysis');
-    
+
     try {
       // 1. Upload the image
       const formData = new FormData();
       formData.append('image', file);
-      
-      const uploadResponse = await fetch('http://localhost:5000/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!uploadResponse.ok) {
-        throw new Error('Upload failed. Please ensure the backend is running.');
+
+      let uploadResponse;
+      try {
+        uploadResponse = await fetch('http://localhost:5000/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+      } catch (networkErr) {
+        throw new Error('Cannot reach the backend server at localhost:5000. Make sure it is running with "npm run dev" in the /backend folder.');
       }
-      
+
+      if (!uploadResponse.ok) {
+        let errMsg = `Upload failed (HTTP ${uploadResponse.status})`;
+        try {
+          const errBody = await uploadResponse.json();
+          errMsg = errBody?.error?.message || errMsg;
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
+
       const uploadData = await uploadResponse.json();
-      const imageId = uploadData.data.id;
-      
+      const imageId = uploadData?.data?.id;
+
+      if (!imageId) {
+        throw new Error('Upload succeeded but no imageId was returned from the backend.');
+      }
+
+      console.log('Upload successful, imageId:', imageId);
+
       // 2. Perform analysis
       const analysisResponse = await fetch('http://localhost:5000/api/analyze', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageId, analysisType: 'detailed' }),
       });
-      
+
       if (!analysisResponse.ok) {
-        throw new Error('Analysis failed. Please try again.');
+        let errMsg = `Analysis failed (HTTP ${analysisResponse.status})`;
+        try {
+          const errBody = await analysisResponse.json();
+          errMsg = errBody?.error?.message || errMsg;
+        } catch (_) {}
+        throw new Error(errMsg);
       }
-      
-      const analysisData = await analysisResponse.json();
-      
+
+      const analysisResult = await analysisResponse.json();
+      console.log('Analysis successful:', analysisResult);
+
       // Give a small delay to allow the animation to feel natural
       setTimeout(() => {
-        setAnalysisResults(analysisData.data.suggestions);
+        setAnalysisData(analysisResult.data);
         setCurrentSection('results');
       }, 1500);
-      
+
     } catch (error) {
       console.error('Error during analysis:', error);
-      alert(error.message || 'Something went wrong. Is the backend server running?');
+      alert('Error: ' + (error.message || 'Something went wrong. Is the backend server running?'));
       setCurrentSection('upload');
     }
-  };
-
-  const handleRedesign = () => {
-    setCurrentSection('comparison');
-    // Simulate redesigned image
-    setTimeout(() => {
-      setRedesignedImage(uploadedImage); // In real app, this would be the AI-redesigned image
-    }, 1000);
   };
 
   const handleReset = () => {
     setCurrentSection('landing');
     setUploadedImage(null);
-    setAnalysisResults(null);
-    setRedesignedImage(null);
+    setAnalysisData(null);
   };
 
   return (
@@ -110,17 +119,9 @@ function App() {
             )}
             
             {currentSection === 'results' && (
-              <ResultsDashboard
+              <Dashboard
                 originalImage={uploadedImage}
-                results={analysisResults}
-                onRedesign={handleRedesign}
-              />
-            )}
-            
-            {currentSection === 'comparison' && (
-              <ComparisonSection
-                originalImage={uploadedImage}
-                redesignedImage={redesignedImage}
+                results={analysisData}
                 onReset={handleReset}
               />
             )}

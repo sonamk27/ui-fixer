@@ -5,11 +5,25 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const path = require('path');
+const fs = require('fs');
+
+// Ensure required upload directories exist on startup
+const uploadsDir = path.join(__dirname, '../uploads');
+const metadataDir = path.join(uploadsDir, 'metadata');
+const analysisDir = path.join(uploadsDir, 'analysis');
+const redesignedDir = path.join(uploadsDir, 'redesigned');
+[uploadsDir, metadataDir, analysisDir, redesignedDir].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`Created directory: ${dir}`);
+  }
+});
 
 // Import routes
 const uploadRoutes = require('./routes/upload');
 const analysisRoutes = require('./routes/analysis');
 const resultsRoutes = require('./routes/results');
+const redesignRoutes = require('./routes/redesign');
 const regenerationRoutes = require('./routes/regeneration');
 const comparisonRoutes = require('./routes/comparison');
 
@@ -22,7 +36,9 @@ const app = express();
 
 // Security middleware
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false, // Temporarily disabled to resolve framing issues in local dev
+  frameguard: false, // Disable X-Frame-Options: SAMEORIGIN
 }));
 
 // CORS configuration
@@ -89,6 +105,7 @@ app.get('/health', (req, res) => {
 app.use('/api/upload', uploadRoutes);
 app.use('/api/analyze', analysisRoutes);
 app.use('/api/results', resultsRoutes);
+app.use('/api/redesign', redesignRoutes);
 app.use('/api/regeneration', regenerationRoutes);
 app.use('/api/comparison', comparisonRoutes);
 

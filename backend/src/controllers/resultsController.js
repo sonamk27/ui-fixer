@@ -7,7 +7,7 @@ class ResultsController {
   /**
    * Get analysis results by ID
    */
-  async getResults(req, res, next) {
+  getResults = async (req, res, next) => {
     try {
       const { id } = req.params;
 

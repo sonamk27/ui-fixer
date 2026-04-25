@@ -1,12 +1,51 @@
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs').promises;
-const UIComparison = require('../models/UIComparison');
 const analysisService = require('../services/analysisService');
+
+// File-based storage helpers (no MongoDB needed)
+const getComparisonsDir = () => path.join(__dirname, '../../uploads/comparisons');
+
+const saveComparisonToFile = async (comparison) => {
+  const dir = getComparisonsDir();
+  await fs.mkdir(dir, { recursive: true });
+  const filePath = path.join(dir, `${comparison.id}.json`);
+  await fs.writeFile(filePath, JSON.stringify(comparison, null, 2));
+  return comparison;
+};
+
+const readComparisonFromFile = async (comparisonId) => {
+  try {
+    const filePath = path.join(getComparisonsDir(), `${comparisonId}.json`);
+    const data = await fs.readFile(filePath, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+};
+
+const listAllComparisons = async () => {
+  try {
+    const dir = getComparisonsDir();
+    await fs.mkdir(dir, { recursive: true });
+    const files = await fs.readdir(dir);
+    const comparisons = [];
+    for (const file of files.filter(f => f.endsWith('.json'))) {
+      try {
+        const data = await fs.readFile(path.join(dir, file), 'utf8');
+        comparisons.push(JSON.parse(data));
+      } catch (_) {}
+    }
+    return comparisons;
+  } catch (_) {
+    return [];
+  }
+};
 
 /**
  * Comparison Controller
- * Handles UI comparison between original and modified designs
+ * Handles UI comparison between original and modified designs (file-based, no MongoDB)
  */
 class ComparisonController {
   /**
@@ -15,7 +54,6 @@ class ComparisonController {
   generateModifiedUI = async (req, res, next) => {
     try {
       const { originalImageId, modifications, comparisonType = 'basic' } = req.body;
-
       console.log(`Generating modified UI for image: ${originalImageId}`);
 
       // Get original image metadata
@@ -27,11 +65,11 @@ class ComparisonController {
         return next(error);
       }
 
-      // Generate modified image
+      // Generate modified image (simulated)
       const modifiedImageResult = await this.generateModifiedImage(originalImage, modifications, comparisonType);
 
-      // Save comparison
-      const comparison = new UIComparison({
+      const comparison = {
+        id: uuidv4(),
         originalImage: {
           url: originalImage.publicUrl,
           filename: originalImage.filename,
@@ -43,30 +81,32 @@ class ComparisonController {
           url: modifiedImageResult.url,
           filename: modifiedImageResult.filename,
           size: modifiedImageResult.size,
-          generatedAt: new Date(),
+          generatedAt: new Date().toISOString(),
           processingTime: modifiedImageResult.processingTime
         },
         analysis: modifiedImageResult.analysis,
         appliedModifications: modifications || [],
         comparisonType,
         confidence: modifiedImageResult.confidence,
-        status: 'completed'
-      });
+        status: 'completed',
+        version: 1,
+        createdAt: new Date().toISOString()
+      };
 
-      const savedComparison = await comparison.save();
+      await saveComparisonToFile(comparison);
 
       res.status(201).json({
         success: true,
         data: {
-          comparisonId: savedComparison.id,
-          originalImage: savedComparison.originalImage,
-          modifiedImage: savedComparison.modifiedImage,
-          analysis: savedComparison.analysis,
-          appliedModifications: savedComparison.appliedModifications,
-          comparisonType: savedComparison.comparisonType,
-          confidence: savedComparison.confidence,
-          processingTime: savedComparison.processingDuration,
-          createdAt: savedComparison.createdAt
+          comparisonId: comparison.id,
+          originalImage: comparison.originalImage,
+          modifiedImage: comparison.modifiedImage,
+          analysis: comparison.analysis,
+          appliedModifications: comparison.appliedModifications,
+          comparisonType: comparison.comparisonType,
+          confidence: comparison.confidence,
+          processingTime: modifiedImageResult.processingTime,
+          createdAt: comparison.createdAt
         },
         message: 'Modified UI generated successfully'
       });
@@ -84,7 +124,6 @@ class ComparisonController {
     try {
       const { originalImageId, modifiedImageUrl, analysis, appliedModifications } = req.body;
 
-      // Get original image metadata
       const originalImage = await this.getOriginalImage(originalImageId);
       if (!originalImage) {
         const error = new Error('Original image not found');
@@ -93,8 +132,8 @@ class ComparisonController {
         return next(error);
       }
 
-      // Create comparison entry
-      const comparison = new UIComparison({
+      const comparison = {
+        id: uuidv4(),
         originalImage: {
           url: originalImage.publicUrl,
           filename: originalImage.filename,
@@ -105,28 +144,30 @@ class ComparisonController {
         modifiedImage: {
           url: modifiedImageUrl,
           filename: this.extractFilename(modifiedImageUrl),
-          size: 0, // Would be calculated in real implementation
-          generatedAt: new Date(),
+          size: 0,
+          generatedAt: new Date().toISOString(),
           processingTime: 0
         },
         analysis,
         appliedModifications: appliedModifications || [],
         comparisonType: 'basic',
         confidence: 80,
-        status: 'completed'
-      });
+        status: 'completed',
+        version: 1,
+        createdAt: new Date().toISOString()
+      };
 
-      const savedComparison = await comparison.save();
+      await saveComparisonToFile(comparison);
 
       res.status(201).json({
         success: true,
         data: {
-          comparisonId: savedComparison.id,
-          originalImage: savedComparison.originalImage,
-          modifiedImage: savedComparison.modifiedImage,
-          analysis: savedComparison.analysis,
-          appliedModifications: savedComparison.appliedModifications,
-          createdAt: savedComparison.createdAt
+          comparisonId: comparison.id,
+          originalImage: comparison.originalImage,
+          modifiedImage: comparison.modifiedImage,
+          analysis: comparison.analysis,
+          appliedModifications: comparison.appliedModifications,
+          createdAt: comparison.createdAt
         },
         message: 'Comparison saved successfully'
       });
@@ -143,9 +184,7 @@ class ComparisonController {
   getComparison = async (req, res, next) => {
     try {
       const { comparisonId } = req.params;
-
-      const comparison = await UIComparison.findById(comparisonId)
-        .populate('parentComparison');
+      const comparison = await readComparisonFromFile(comparisonId);
 
       if (!comparison) {
         const error = new Error('Comparison not found');
@@ -156,7 +195,7 @@ class ComparisonController {
 
       res.status(200).json({
         success: true,
-        data: comparison.getSummary(),
+        data: comparison,
         message: 'Comparison retrieved successfully'
       });
 
@@ -173,7 +212,6 @@ class ComparisonController {
     try {
       const { originalImageId } = req.params;
 
-      // Find original image to get URL
       const originalImage = await this.getOriginalImage(originalImageId);
       if (!originalImage) {
         const error = new Error('Original image not found');
@@ -182,15 +220,17 @@ class ComparisonController {
         return next(error);
       }
 
-      // Get all comparisons for this original image
-      const comparisons = await UIComparison.findByOriginalImage(originalImage.publicUrl);
+      const allComparisons = await listAllComparisons();
+      const filtered = allComparisons.filter(
+        c => c.originalImage?.url === originalImage.publicUrl
+      );
 
       res.status(200).json({
         success: true,
         data: {
           originalImage,
-          comparisons: comparisons.map(comp => comp.getSummary()),
-          totalComparisons: comparisons.length
+          comparisons: filtered,
+          totalComparisons: filtered.length
         },
         message: 'Comparisons retrieved successfully'
       });
@@ -208,7 +248,6 @@ class ComparisonController {
     try {
       const { originalImageId } = req.params;
 
-      // Find original image
       const originalImage = await this.getOriginalImage(originalImageId);
       if (!originalImage) {
         const error = new Error('Original image not found');
@@ -217,15 +256,17 @@ class ComparisonController {
         return next(error);
       }
 
-      // Get comparison chain
-      const comparisons = await UIComparison.findComparisonChain(originalImage.publicUrl);
+      const allComparisons = await listAllComparisons();
+      const chain = allComparisons
+        .filter(c => c.originalImage?.url === originalImage.publicUrl)
+        .sort((a, b) => (a.version || 1) - (b.version || 1));
 
       res.status(200).json({
         success: true,
         data: {
           originalImage,
-          comparisonChain: comparisons.map(comp => comp.getSummary()),
-          totalVersions: comparisons.length
+          comparisonChain: chain,
+          totalVersions: chain.length
         },
         message: 'Comparison chain retrieved successfully'
       });
@@ -244,7 +285,6 @@ class ComparisonController {
       const { comparisonId } = req.params;
       const { rating, comments, preferred } = req.body;
 
-      // Validate rating
       if (rating && (rating < 1 || rating > 5)) {
         const error = new Error('Rating must be between 1 and 5');
         error.statusCode = 400;
@@ -252,7 +292,7 @@ class ComparisonController {
         return next(error);
       }
 
-      const comparison = await UIComparison.findById(comparisonId);
+      const comparison = await readComparisonFromFile(comparisonId);
       if (!comparison) {
         const error = new Error('Comparison not found');
         error.statusCode = 404;
@@ -260,19 +300,14 @@ class ComparisonController {
         return next(error);
       }
 
-      // Add feedback
-      await comparison.addUserFeedback(rating, comments, preferred);
+      comparison.userFeedback = { rating, comments, preferred, submittedAt: new Date().toISOString() };
+      await saveComparisonToFile(comparison);
 
       res.status(200).json({
         success: true,
         data: {
           comparisonId: comparison.id,
-          feedback: {
-            rating,
-            comments,
-            preferred,
-            submittedAt: new Date()
-          }
+          feedback: comparison.userFeedback
         },
         message: 'Feedback added successfully'
       });
@@ -291,7 +326,7 @@ class ComparisonController {
       const { comparisonId } = req.params;
       const { modifications, comparisonType } = req.body;
 
-      const parentComparison = await UIComparison.findById(comparisonId);
+      const parentComparison = await readComparisonFromFile(comparisonId);
       if (!parentComparison) {
         const error = new Error('Parent comparison not found');
         error.statusCode = 404;
@@ -299,43 +334,43 @@ class ComparisonController {
         return next(error);
       }
 
-      // Generate new modified image
       const modifiedImageResult = await this.generateModifiedImage(
         parentComparison.originalImage,
         modifications,
         comparisonType
       );
 
-      // Create new comparison version
-      const newComparison = new UIComparison({
+      const newComparison = {
+        id: uuidv4(),
         originalImage: parentComparison.originalImage,
         modifiedImage: {
           url: modifiedImageResult.url,
           filename: modifiedImageResult.filename,
           size: modifiedImageResult.size,
-          generatedAt: new Date(),
+          generatedAt: new Date().toISOString(),
           processingTime: modifiedImageResult.processingTime
         },
         analysis: modifiedImageResult.analysis,
         appliedModifications: modifications || [],
         comparisonType: comparisonType || parentComparison.comparisonType,
         confidence: modifiedImageResult.confidence,
-        parentComparison: parentComparison._id,
+        parentComparison: parentComparison.id,
         version: (parentComparison.version || 1) + 1,
-        status: 'completed'
-      });
+        status: 'completed',
+        createdAt: new Date().toISOString()
+      };
 
-      const savedComparison = await newComparison.save();
+      await saveComparisonToFile(newComparison);
 
       res.status(201).json({
         success: true,
         data: {
-          comparisonId: savedComparison.id,
-          version: savedComparison.version,
-          originalImage: savedComparison.originalImage,
-          modifiedImage: savedComparison.modifiedImage,
-          analysis: savedComparison.analysis,
-          appliedModifications: savedComparison.appliedModifications,
+          comparisonId: newComparison.id,
+          version: newComparison.version,
+          originalImage: newComparison.originalImage,
+          modifiedImage: newComparison.modifiedImage,
+          analysis: newComparison.analysis,
+          appliedModifications: newComparison.appliedModifications,
           parentVersion: parentComparison.version
         },
         message: 'New comparison version created successfully'
@@ -352,11 +387,23 @@ class ComparisonController {
    */
   getComparisonStats = async (req, res, next) => {
     try {
-      const stats = await UIComparison.getStatistics();
+      const all = await listAllComparisons();
+      const typeCounts = all.reduce((acc, c) => {
+        const t = c.comparisonType || 'basic';
+        acc[t] = (acc[t] || 0) + 1;
+        return acc;
+      }, {});
+      const avgConfidence = all.length
+        ? Math.round(all.reduce((s, c) => s + (c.confidence || 80), 0) / all.length)
+        : 0;
 
       res.status(200).json({
         success: true,
-        data: stats,
+        data: {
+          totalComparisons: all.length,
+          avgConfidence,
+          comparisonsByType: typeCounts
+        },
         message: 'Comparison statistics retrieved successfully'
       });
 
@@ -366,156 +413,65 @@ class ComparisonController {
     }
   }
 
-  /**
-   * Generate modified image from original
-   */
+  // ── Private helpers ────────────────────────────────────────────────────────
+
   generateModifiedImage = async (originalImage, modifications, comparisonType) => {
-    try {
-      const startTime = Date.now();
+    const startTime = Date.now();
+    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
 
-      // In a real implementation, this would:
-      // 1. Load the original image
-      // 2. Apply each modification programmatically
-      // 3. Use image processing libraries to modify colors, spacing, etc.
-      // 4. Save the modified image
-      // 5. Return the new image URL
+    const modifiedFilename = `modified_${originalImage.id || Date.now()}_${Date.now()}.jpg`;
+    const modifiedUrl = `/uploads/${modifiedFilename}`;
+    const analysis = this.generateAnalysisFromModifications(modifications, comparisonType);
+    const processingTime = Date.now() - startTime;
+    const confidence = this.calculateConfidence(modifications, comparisonType);
 
-      // For now, simulate the process
-      await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000));
-
-      const modifiedFilename = `modified_${originalImage.id}_${Date.now()}.jpg`;
-      const modifiedUrl = `/uploads/${modifiedFilename}`;
-
-      // Generate enhanced analysis based on modifications
-      const analysis = this.generateAnalysisFromModifications(modifications, comparisonType);
-
-      const processingTime = Date.now() - startTime;
-      const confidence = this.calculateConfidence(modifications, comparisonType);
-
-      return {
-        url: modifiedUrl,
-        filename: modifiedFilename,
-        size: originalImage.size, // Would be calculated in real implementation
-        processingTime,
-        analysis,
-        confidence
-      };
-
-    } catch (error) {
-      console.error('Error generating modified image:', error);
-      throw error;
-    }
+    return { url: modifiedUrl, filename: modifiedFilename, size: originalImage.size || 0, processingTime, analysis, confidence };
   }
 
-  /**
-   * Generate analysis from modifications
-   */
   generateAnalysisFromModifications = (modifications, comparisonType) => {
-    const baseAnalysis = {
-      colorImprovements: [],
-      spacingIssues: [],
-      typographyFixes: [],
-      layoutProblems: [],
-      uxSuggestions: []
-    };
+    const baseAnalysis = { colorImprovements: [], spacingIssues: [], typographyFixes: [], layoutProblems: [], uxSuggestions: [] };
+    if (!modifications || !Array.isArray(modifications)) return baseAnalysis;
 
-    if (!modifications || !Array.isArray(modifications)) {
-      return baseAnalysis;
-    }
-
-    modifications.forEach(mod => {
-      const { type, target, newValue, description } = mod;
-
+    modifications.forEach(({ type, target, newValue, description }) => {
       switch (type) {
         case 'color':
-          baseAnalysis.colorImprovements.push({
-            issue: `Inconsistent colors in ${target}`,
-            suggestion: description || `Apply color scheme: ${newValue.color || '#667eea'}`
-          });
+          baseAnalysis.colorImprovements.push({ issue: `Inconsistent colors in ${target}`, suggestion: description || `Apply color: ${newValue?.color || '#667eea'}` });
           break;
-
         case 'spacing':
-          baseAnalysis.spacingIssues.push({
-            issue: `Poor spacing in ${target}`,
-            suggestion: description || `Use ${newValue.padding || '16px'} padding and ${newValue.margin || '8px'} margin`
-          });
+          baseAnalysis.spacingIssues.push({ issue: `Poor spacing in ${target}`, suggestion: description || `Use ${newValue?.padding || '16px'} padding` });
           break;
-
         case 'typography':
-          baseAnalysis.typographyFixes.push({
-            issue: `Typography issues in ${target}`,
-            suggestion: description || `Set font-size to ${newValue.fontSize || '16px'} and line-height to ${newValue.lineHeight || '1.6'}`
-          });
+          baseAnalysis.typographyFixes.push({ issue: `Typography issues in ${target}`, suggestion: description || `Set font-size to ${newValue?.fontSize || '16px'}` });
           break;
-
         case 'layout':
-          baseAnalysis.layoutProblems.push({
-            issue: `Layout problems in ${target}`,
-            suggestion: description || `Use ${newValue.display || 'flex'} layout with ${newValue.flexDirection || 'row'} direction`
-          });
+          baseAnalysis.layoutProblems.push({ issue: `Layout problems in ${target}`, suggestion: description || `Use ${newValue?.display || 'flex'} layout` });
           break;
       }
     });
 
-    // Add comprehensive analysis for detailed/comprehensive types
     if (comparisonType === 'comprehensive') {
-      baseAnalysis.accessibilityIssues = [
-        {
-          issue: 'Missing accessibility features',
-          suggestion: 'Add ARIA labels and keyboard navigation'
-        }
-      ];
-      baseAnalysis.responsiveDesign = [
-        {
-          issue: 'Responsive design needs improvement',
-          suggestion: 'Implement mobile-first responsive design'
-        }
-      ];
+      baseAnalysis.accessibilityIssues = [{ issue: 'Missing accessibility features', suggestion: 'Add ARIA labels and keyboard navigation' }];
+      baseAnalysis.responsiveDesign = [{ issue: 'Responsive design needs improvement', suggestion: 'Implement mobile-first responsive design' }];
     }
 
     return baseAnalysis;
   }
 
-  /**
-   * Calculate confidence based on modifications and type
-   */
   calculateConfidence = (modifications, comparisonType) => {
-    let baseConfidence = 75;
-
-    // Add confidence based on modification count
-    if (modifications && modifications.length > 0) {
-      baseConfidence += Math.min(modifications.length * 3, 15);
-    }
-
-    // Add confidence based on comparison type
-    const typeBonus = {
-      basic: 0,
-      detailed: 5,
-      comprehensive: 10
-    };
-
-    baseConfidence += typeBonus[comparisonType] || 0;
-
-    return Math.min(baseConfidence, 95);
+    let base = 75;
+    if (modifications?.length) base += Math.min(modifications.length * 3, 15);
+    base += ({ basic: 0, detailed: 5, comprehensive: 10 }[comparisonType] || 0);
+    return Math.min(base, 95);
   }
 
-  /**
-   * Get original image metadata
-   */
   getOriginalImage = async (originalImageId) => {
     try {
-      // Try to get from analysis service first
       return await analysisService.getImageMetadata(originalImageId);
-    } catch (error) {
-      // If not found in analysis, try to find in comparisons
-      const comparison = await UIComparison.findOne({ 'originalImage.url': { $regex: originalImageId } });
-      return comparison ? comparison.originalImage : null;
+    } catch (_) {
+      return null;
     }
   }
 
-  /**
-   * Extract filename from URL
-   */
   extractFilename = (url) => {
     if (!url) return 'modified.jpg';
     return url.split('/').pop() || 'modified.jpg';
