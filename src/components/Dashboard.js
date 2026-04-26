@@ -15,39 +15,16 @@ import {
   Smartphone,
   Download,
   ExternalLink,
-  ChevronRight,
-  Filter
+  ChevronRight
 } from 'lucide-react';
+import ImplementationPlan from './ImplementationPlan';
+
+const API_BASE_URL = 'http://localhost:5005';
 
 const Dashboard = ({ originalImage, results, onReset }) => {
-  const { report, redesignUrl, imageId } = results;
+  const { report, imageId } = results;
   const [activeNoteTab, setActiveNoteTab] = useState('beginner');
   const [severityFilter, setSeverityFilter] = useState('all');
-  const [blobUrl, setBlobUrl] = useState(null);
-
-  // Fetch redesign HTML and create a blob URL to bypass CSP frame-ancestors issues
-  React.useEffect(() => {
-    let currentUrl = null;
-    const fetchRedesign = async () => {
-      try {
-        const response = await fetch(redesignUrl);
-        const html = await response.text();
-        const blob = new Blob([html], { type: 'text/html' });
-        currentUrl = URL.createObjectURL(blob);
-        setBlobUrl(currentUrl);
-      } catch (error) {
-        console.error('Error loading redesign HTML:', error);
-      }
-    };
-
-    fetchRedesign();
-
-    return () => {
-      if (currentUrl) {
-        URL.revokeObjectURL(currentUrl);
-      }
-    };
-  }, [redesignUrl]);
 
   const gradeItems = [
     { label: 'Layout', score: report.grades.layout, icon: <Layers className="w-4 h-4" /> },
@@ -246,80 +223,25 @@ const Dashboard = ({ originalImage, results, onReset }) => {
           </div>
         </motion.div>
 
-        {/* Side-by-Side Comparison */}
+        {/* Implementation Plan */}
+        <ImplementationPlan 
+          report={report} 
+          originalImage={originalImage} 
+        />
+        
+        {/* Action Buttons */}
         <motion.div 
-          className="glass-dark rounded-3xl p-8 border border-white/10"
+          className="flex justify-center gap-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
         >
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-2xl font-bold flex items-center gap-3">
-              <Palette className="w-6 h-6 text-purple-400" />
-              Comparison View
-            </h3>
-            <div className="flex gap-4">
-               <a 
-                href={redesignUrl} 
-                download={`redesign-${results.imageId}.html`}
-                className="flex items-center gap-2 px-4 py-2 glass rounded-xl text-sm font-bold hover:bg-white/10 transition"
-              >
-                <Download className="w-4 h-4" /> Download HTML
-              </a>
-              <button 
-                onClick={onReset}
-                className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm font-bold hover:bg-white/10 transition"
-              >
-                New Analysis
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Original */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center px-2">
-                <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Original Screenshot</span>
-                <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/20 font-bold">BEFORE</span>
-              </div>
-              <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/40 aspect-video flex items-center justify-center">
-                <img src={originalImage} alt="Original" className="max-w-full max-h-full object-contain" />
-              </div>
-            </div>
-
-            {/* Redesigned */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center px-2">
-                <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">AI Redesigned UI</span>
-                <span className="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/20 font-bold flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> AFTER
-                </span>
-              </div>
-              <div className="rounded-2xl overflow-hidden border border-white/10 bg-white aspect-video relative group flex items-center justify-center">
-                {blobUrl ? (
-                  <>
-                    <iframe 
-                      src={blobUrl} 
-                      title="Redesigned UI"
-                      className="w-full h-full border-none"
-                    />
-                    <a 
-                      href={redesignUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="absolute bottom-4 right-4 p-3 bg-blue-600 text-white rounded-xl shadow-xl opacity-0 group-hover:opacity-100 transition translate-y-2 group-hover:translate-y-0"
-                    >
-                      <ExternalLink className="w-5 h-5" />
-                    </a>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Loading Redesign...</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <button 
+            onClick={onReset}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition"
+          >
+            New Analysis
+          </button>
         </motion.div>
 
       </div>

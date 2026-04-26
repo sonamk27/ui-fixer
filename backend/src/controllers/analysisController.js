@@ -45,7 +45,8 @@ class AnalysisController {
           processingTime: results.processingTime,
           confidence: results.confidence,
           report: results.report,
-          redesignUrl: `http://localhost:5000/api/redesign/${results.imageId}`,
+          designSystem: results.designSystem,
+          redesignUrl: `http://localhost:5001/api/redesign/${results.imageId}`,
           metadata: results.metadata
         },
         message: 'Image analysis completed successfully'

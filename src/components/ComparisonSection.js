@@ -15,7 +15,7 @@ import ChangeTracker from './ChangeTracker';
 import ModificationOverlay from './ModificationOverlay';
 import { changeTracker as changeTrackerUtil } from '../utils/changeTracking';
 
-const API_BASE_URL = 'http://localhost:5001';
+const API_BASE_URL = 'http://localhost:5005';
 
 const ComparisonSection = ({ originalImage, redesignedImage, analysisResults, onReset }) => {
   const [viewMode, setViewMode] = useState('slider');

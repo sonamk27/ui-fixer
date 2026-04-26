@@ -77,7 +77,7 @@ export async function testAPICommunication() {
   
   try {
     // Test regeneration endpoint
-    const response = await fetch('http://localhost:5001/api/regeneration', {
+    const response = await fetch('http://localhost:5005/api/regeneration', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

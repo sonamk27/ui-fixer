@@ -8,7 +8,7 @@ import ChatAssistant from './components/ChatAssistant';
 import Navigation from './components/Navigation';
 import './index.css';
 
-const API_BASE_URL = 'http://localhost:5001';
+const API_BASE_URL = 'http://localhost:5005';
 
 function App() {
   const [currentSection, setCurrentSection] = useState('landing');
