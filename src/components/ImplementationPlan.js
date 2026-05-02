@@ -18,7 +18,7 @@ import {
   Shield
 } from 'lucide-react';
 
-const ImplementationPlan = ({ report, originalImage }) => {
+const ImplementationPlan = ({ report, originalImage, implementationPlan }) => {
   const [activePhase, setActivePhase] = useState('immediate');
   const [copiedItem, setCopiedItem] = useState(null);
 
@@ -130,159 +130,72 @@ const ImplementationPlan = ({ report, originalImage }) => {
     return efforts[annotation.zone] || "Medium";
   };
 
-  // Generate implementation phases based on analysis results
-  const phases = {
-    immediate: {
-      title: "Immediate Fixes (Critical Issues)",
-      icon: AlertCircle,
-      color: "red",
-      priority: "high",
-      estimatedTime: "2-4 hours",
-      tasks: report.annotations
-        .filter(ann => ann.severity === 'critical')
-        .map(ann => ({
-          id: ann.id,
-          title: ann.title,
-          description: ann.description,
-          fix: ann.fix,
-          zone: ann.zone,
-          code: generateCodeFix(ann),
-          effort: calculateEffort(ann)
-        }))
-    },
-    short: {
-      title: "Short-term Improvements (1-2 weeks)",
-      icon: Clock,
-      color: "yellow",
-      priority: "medium",
-      estimatedTime: "1-2 weeks",
-      tasks: [
-        {
-          id: "typography",
-          title: "Improve Typography Hierarchy",
-          description: "Establish clear visual hierarchy with consistent font sizes and weights",
-          fix: "Implement a typography scale using CSS custom properties",
-          code: `/* Typography Scale */
-:root {
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 1.875rem;
-}
-
-h1 { font-size: var(--font-size-3xl); font-weight: 800; }
-h2 { font-size: var(--font-size-2xl); font-weight: 700; }
-h3 { font-size: var(--font-size-xl); font-weight: 600; }`,
-          zone: "general",
-          effort: "Medium"
-        },
-        {
-          id: "spacing",
-          title: "Standardize Spacing System",
-          description: "Apply consistent spacing using an 8-point grid system",
-          fix: "Use CSS custom properties for consistent spacing throughout",
-          code: `/* Spacing System */
-:root {
-  --spacing-1: 0.25rem;
-  --spacing-2: 0.5rem;
-  --spacing-3: 0.75rem;
-  --spacing-4: 1rem;
-  --spacing-6: 1.5rem;
-  --spacing-8: 2rem;
-  --spacing-12: 3rem;
-}
-
-.component { margin: var(--spacing-4); padding: var(--spacing-6); }`,
-          zone: "general",
-          effort: "Medium"
-        }
-      ]
-    },
-    long: {
-      title: "Long-term Enhancements (1-2 months)",
-      icon: Target,
-      color: "blue",
-      priority: "low",
-      estimatedTime: "1-2 months",
-      tasks: [
-        {
-          id: "components",
-          title: "Build Component Library",
-          description: "Create reusable components for consistent design patterns",
-          fix: "Develop a component library with documented props and variants",
-          code: `// Button Component Example
-const Button = ({ variant = 'primary', size = 'md', children, ...props }) => {
-  const baseClasses = 'font-medium rounded-lg transition-colors';
-  const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+  const generateStaticPhases = (report) => {
+    // Fallback static implementation plan for backward compatibility
+    return {
+      immediate: {
+        title: "Immediate Fixes (Critical Issues)",
+        icon: AlertCircle,
+        color: "red",
+        priority: "high",
+        estimatedTime: "2-4 hours",
+        description: `Address critical issues identified in the analysis (${report.overallScore}/100).`,
+        tasks: report.annotations
+          .filter(ann => ann.severity === 'critical')
+          .map(ann => ({
+            id: ann.id,
+            title: ann.title,
+            description: ann.description,
+            fix: ann.fix,
+            zone: ann.zone,
+            code: generateCodeFix(ann),
+            effort: calculateEffort(ann)
+          }))
+      },
+      short: {
+        title: "Short-term Improvements (1-2 weeks)",
+        icon: Clock,
+        color: "yellow",
+        priority: "medium",
+        estimatedTime: "1-2 weeks",
+        description: `Implement medium-priority improvements (${report.overallScore}/100).`,
+        tasks: report.annotations
+          .filter(ann => ann.severity === 'warning')
+          .map(ann => ({
+            id: ann.id,
+            title: ann.title,
+            description: ann.description,
+            fix: ann.fix,
+            zone: ann.zone,
+            code: generateCodeFix(ann),
+            effort: calculateEffort(ann)
+          }))
+      },
+      long: {
+        title: "Long-term Enhancements (1-2 months)",
+        icon: Target,
+        color: "blue",
+        priority: "low",
+        estimatedTime: "1-2 months",
+        description: `Add advanced features and optimizations (${report.overallScore}/100).`,
+        tasks: report.annotations
+          .filter(ann => ann.severity === 'suggestion')
+          .map(ann => ({
+            id: ann.id,
+            title: ann.title,
+            description: ann.description,
+            fix: ann.fix,
+            zone: ann.zone,
+            code: generateCodeFix(ann),
+            effort: calculateEffort(ann)
+          }))
+      }
+    };
   };
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg'
-  };
+
+  // Use dynamic implementation plan from backend, fallback to static if not available
+  const phases = implementationPlan || generateStaticPhases(report);
   
-  return (
-    <button 
-      className={\`\${baseClasses} \${variantClasses[variant]} \${sizeClasses[size]}\`}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-};`,
-          zone: "general",
-          effort: "High"
-        },
-        {
-          id: "accessibility",
-          title: "Enhanced Accessibility",
-          description: "Implement comprehensive accessibility features and testing",
-          fix: "Add ARIA labels, keyboard navigation, and screen reader support",
-          code: `/* Accessibility Improvements */
-.button:focus {
-  outline: 2px solid #3B82F6;
-  outline-offset: 2px;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* Skip to content link */
-.skip-link {
-  position: absolute;
-  top: -40px;
-  left: 6px;
-  background: #000;
-  color: white;
-  padding: 8px;
-  text-decoration: none;
-  z-index: 100;
-}
-
-.skip-link:focus {
-  top: 6px;
-}`,
-          zone: "general",
-          effort: "High"
-        }
-      ]
-    }
-  };
-
   const currentPhase = phases[activePhase];
   const PhaseIcon = currentPhase.icon;
 

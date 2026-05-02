@@ -263,8 +263,10 @@ Do not add any text or explanation outside these delimiters.`;
     const accessibilityScore = Math.min(95, Math.max(40, colorContrastScore + Math.floor(Math.random() * 11) - 5)); // Correlated with contrast
     const responsivenessScore = randomScore + Math.floor(Math.random() * 11) - 3;
     
+    const overallScore = Math.min(100, Math.max(40, randomScore));
+    
     const report = {
-      overallScore: Math.min(100, Math.max(40, randomScore)),
+      overallScore: overallScore,
       grades: {
         layout: Math.min(100, Math.max(40, layoutScore)),
         typography: Math.min(100, Math.max(40, typographyScore)),
@@ -273,10 +275,10 @@ Do not add any text or explanation outside these delimiters.`;
         accessibility: Math.min(100, Math.max(40, accessibilityScore)),
         responsiveness: Math.min(100, Math.max(40, responsivenessScore))
       },
-      annotations: this.generateRealisticAnnotations(randomScore, analysisType),
-      summary: this.generateContextualSummary(randomScore, analysisType),
-      developerNotes: this.generateDeveloperNotes(randomScore, analysisType),
-      designerNotes: this.generateDesignerNotes(randomScore, analysisType)
+      annotations: this.generateRealisticAnnotations(overallScore, analysisType),
+      summary: this.generateContextualSummary(overallScore, analysisType),
+      developerNotes: this.generateDeveloperNotes(overallScore, analysisType),
+      designerNotes: this.generateDesignerNotes(overallScore, analysisType)
     };
 
     const dummyHtml = `
@@ -341,24 +343,30 @@ Do not add any text or explanation outside these delimiters.`;
 </html>`;
 
     const designSystem = this.generateDesignSystem(report, analysisType);
+    const implementationPlan = this.generateImplementationPlan(report.overallScore, report.annotations, analysisType);
+    
     console.log('Generated design system:', JSON.stringify(designSystem, null, 2));
+    console.log('Generated implementation plan:', Object.keys(implementationPlan));
     
     return { 
       report, 
       redesignedHtml: this.generateImprovedRedesign(report, analysisType),
-      designSystem: designSystem
+      designSystem: designSystem,
+      implementationPlan: implementationPlan
     };
   }
 
   generateRealisticAnnotations(score, analysisType) {
+    console.log(`Generating annotations for score: ${score}, type: ${analysisType}`);
+    
     const issuePool = [
-      // Critical issues
+      // Critical issues - for poor scores
       {
         id: "critical_1",
         zone: "button",
         severity: "critical",
         title: "Insufficient Color Contrast",
-        description: "Primary action button fails WCAG AA contrast standards, making it difficult for users with visual impairments to identify.",
+        description: `Primary action button fails WCAG AA contrast standards (${score}/100), making it difficult for users with visual impairments to identify.`,
         fix: "Increase contrast ratio to 4.5:1 minimum. Try #1D4ED8 background with #FFFFFF text, or use a darker text color."
       },
       {
@@ -366,7 +374,7 @@ Do not add any text or explanation outside these delimiters.`;
         zone: "form",
         severity: "critical",
         title: "Missing Form Labels",
-        description: "Input fields lack proper labels, preventing screen reader users from understanding form requirements.",
+        description: `Input fields lack proper labels (${score}/100), preventing screen reader users from understanding form requirements.`,
         fix: "Add <label> elements with matching 'for' attributes to all form inputs. Include placeholder text as supplementary info only."
       },
       {
@@ -374,16 +382,24 @@ Do not add any text or explanation outside these delimiters.`;
         zone: "nav",
         severity: "critical",
         title: "Keyboard Navigation Broken",
-        description: "Navigation cannot be accessed using Tab key, excluding keyboard-only users from the interface.",
+        description: `Navigation cannot be accessed using Tab key (${score}/100), excluding keyboard-only users from the interface.`,
         fix: "Ensure all interactive elements have tabindex='0' and visible focus states. Test navigation with Tab and Enter keys."
       },
-      // Warning issues
+      {
+        id: "critical_4",
+        zone: "general",
+        severity: "critical",
+        title: "Missing Alt Text",
+        description: `Images lack descriptive alt text (${score}/100), breaking accessibility for screen reader users.`,
+        fix: "Add meaningful alt attributes to all images. Use empty alt='' for decorative images only."
+      },
+      // Warning issues - for fair scores
       {
         id: "warning_1",
         zone: "hero",
         severity: "warning",
         title: "Weak Visual Hierarchy",
-        description: "Headline and subheading have similar visual weight, making it hard to scan content quickly.",
+        description: `Headline and subheading have similar visual weight (${score}/100), making it hard to scan content quickly.`,
         fix: "Increase headline font-size to 3rem+ and font-weight to 800. Reduce subheading to 1.125rem with lighter weight."
       },
       {
@@ -391,7 +407,7 @@ Do not add any text or explanation outside these delimiters.`;
         zone: "general",
         severity: "warning",
         title: "Inconsistent Spacing Scale",
-        description: "Margins and paddings don't follow a consistent rhythm, creating visual dissonance.",
+        description: `Margins and paddings don't follow a consistent rhythm (${score}/100), creating visual dissonance.`,
         fix: "Implement an 8px grid system: use multiples of 8px (8, 16, 24, 32, 40, 48px) for all spacing."
       },
       {
@@ -399,7 +415,7 @@ Do not add any text or explanation outside these delimiters.`;
         zone: "card",
         severity: "warning",
         title: "Poor Touch Targets",
-        description: "Buttons and links are smaller than 44px, making them difficult to tap on mobile devices.",
+        description: `Buttons and links are smaller than 44px (${score}/100), making them difficult to tap on mobile devices.`,
         fix: "Ensure minimum touch target size of 44x44px. Increase padding or use larger buttons for mobile-first design."
       },
       {
@@ -407,16 +423,24 @@ Do not add any text or explanation outside these delimiters.`;
         zone: "general",
         severity: "warning",
         title: "Missing Hover States",
-        description: "Interactive elements don't provide visual feedback on hover, reducing perceived responsiveness.",
+        description: `Interactive elements don't provide visual feedback on hover (${score}/100), reducing perceived responsiveness.`,
         fix: "Add :hover pseudo-classes with subtle transformations (scale: 1.02) or color changes. Use transition for smooth effects."
       },
-      // Suggestions
+      {
+        id: "warning_5",
+        zone: "typography",
+        severity: "warning",
+        title: "Poor Line Height",
+        description: `Text has inadequate line height (${score}/100), reducing readability and creating visual strain.`,
+        fix: "Set line-height to 1.5-1.6 for body text and 1.2-1.3 for headings. Use relative units (em, rem)."
+      },
+      // Suggestions - for good scores
       {
         id: "suggestion_1",
         zone: "general",
         severity: "suggestion",
         title: "Add Micro-interactions",
-        description: "Interface lacks subtle animations that enhance user engagement and provide feedback.",
+        description: `Interface lacks subtle animations (${score}/100) that enhance user engagement and provide feedback.`,
         fix: "Add CSS transitions for hover states, button clicks, and form submissions. Keep animations under 300ms."
       },
       {
@@ -424,7 +448,7 @@ Do not add any text or explanation outside these delimiters.`;
         zone: "footer",
         severity: "suggestion",
         title: "Enhanced Footer Content",
-        description: "Footer could provide more value with additional navigation and trust signals.",
+        description: `Footer could provide more value (${score}/100) with additional navigation and trust signals.`,
         fix: "Add quick links, contact info, social media, and trust badges (SSL, payment methods, certifications)."
       },
       {
@@ -432,69 +456,103 @@ Do not add any text or explanation outside these delimiters.`;
         zone: "general",
         severity: "suggestion",
         title: "Loading States",
-        description: "Users see blank screens during data loading, leading to perceived slow performance.",
+        description: `Users see blank screens during data loading (${score}/100), leading to perceived slow performance.`,
         fix: "Add skeleton screens or loading spinners for async operations. Use shimmer effects for content loading."
+      },
+      {
+        id: "suggestion_4",
+        zone: "performance",
+        severity: "suggestion",
+        title: "Optimize Images",
+        description: `Images could be better optimized for performance (${score}/100) to improve load times.`,
+        fix: "Compress images using WebP format, implement lazy loading, and use responsive images with srcset."
+      },
+      {
+        id: "suggestion_5",
+        zone: "accessibility",
+        severity: "suggestion",
+        title: "Enhanced Focus Management",
+        description: `Focus management could be improved (${score}/100) for better keyboard navigation experience.`,
+        fix: "Implement focus trapping in modals, skip links for navigation, and logical tab order throughout the interface."
       }
     ];
 
-    // Select issues based on score - lower scores get more critical issues
+    // Enhanced score-based issue selection with granular ranges
     let selectedIssues = [];
     const issueCount = analysisType === 'comprehensive' ? 6 : analysisType === 'detailed' ? 4 : 3;
     
-    if (score < 60) {
-      // Poor scores get more critical issues
+    if (score < 65) {
+      // Poor scores (65 and below) - mostly critical issues
       selectedIssues = [
-        ...issuePool.filter(i => i.severity === 'critical').slice(0, 2),
+        ...issuePool.filter(i => i.severity === 'critical').slice(0, 3),
         ...issuePool.filter(i => i.severity === 'warning').slice(0, 2),
-        ...issuePool.filter(i => i.severity === 'suggestion').slice(0, 2)
+        ...issuePool.filter(i => i.severity === 'suggestion').slice(0, 1)
       ];
     } else if (score < 80) {
-      // Average scores get mixed issues
+      // Fair scores (65-79) - mixed critical and warning issues
       selectedIssues = [
         ...issuePool.filter(i => i.severity === 'critical').slice(0, 1),
-        ...issuePool.filter(i => i.severity === 'warning').slice(0, 2),
+        ...issuePool.filter(i => i.severity === 'warning').slice(0, 3),
         ...issuePool.filter(i => i.severity === 'suggestion').slice(0, 2)
       ];
+    } else if (score < 90) {
+      // Good scores (80-89) - mostly warnings and suggestions
+      selectedIssues = [
+        ...issuePool.filter(i => i.severity === 'warning').slice(0, 2),
+        ...issuePool.filter(i => i.severity === 'suggestion').slice(0, 4)
+      ];
     } else {
-      // Good scores get mostly suggestions
+      // Excellent scores (90+) - mostly suggestions for enhancement
       selectedIssues = [
         ...issuePool.filter(i => i.severity === 'warning').slice(0, 1),
-        ...issuePool.filter(i => i.severity === 'suggestion').slice(0, 3)
+        ...issuePool.filter(i => i.severity === 'suggestion').slice(0, 5)
       ];
     }
 
-    return selectedIssues
+    const finalIssues = selectedIssues
       .sort(() => 0.5 - Math.random())
       .slice(0, issueCount);
+    
+    console.log(`Generated ${finalIssues.length} annotations for score ${score}:`, finalIssues.map(i => i.title));
+    return finalIssues;
   }
 
   generateContextualSummary(score, analysisType) {
-    const scoreLevel = score >= 85 ? 'excellent' : score >= 70 ? 'good' : score >= 55 ? 'fair' : 'poor';
+    // Enhanced score level detection with more granular ranges
+    let scoreLevel;
+    if (score >= 90) scoreLevel = 'excellent';
+    else if (score >= 80) scoreLevel = 'good';
+    else if (score >= 65) scoreLevel = 'fair';
+    else scoreLevel = 'poor';
+    
+    console.log(`Generating summary for score: ${score}, level: ${scoreLevel}, type: ${analysisType}`);
     
     const summaries = {
       excellent: {
-        basic: "Your interface demonstrates excellent design fundamentals with strong accessibility and visual hierarchy. The implementation plan focuses on advanced micro-interactions, enhanced accessibility features, and performance optimizations to achieve industry-leading standards.",
-        detailed: "Outstanding UI quality with comprehensive accessibility compliance and professional visual design. The implementation plan addresses advanced enhancements including sophisticated animations, comprehensive component library, and enterprise-level accessibility features.",
-        comprehensive: "Exceptional design execution with near-perfect scores across all metrics. The implementation plan provides strategic enhancements for cutting-edge interactions, advanced design system implementation, and future-proof scalability improvements."
+        basic: `Your interface demonstrates excellent design fundamentals with a score of ${score}. The implementation plan focuses on advanced micro-interactions, enhanced accessibility features, and performance optimizations to achieve industry-leading standards.`,
+        detailed: `Outstanding UI quality (${score}/100) with comprehensive accessibility compliance and professional visual design. The implementation plan addresses advanced enhancements including sophisticated animations, comprehensive component library, and enterprise-level accessibility features.`,
+        comprehensive: `Exceptional design execution (${score}/100) with near-perfect scores across all metrics. The implementation plan provides strategic enhancements for cutting-edge interactions, advanced design system implementation, and future-proof scalability improvements.`
       },
       good: {
-        basic: "Your UI shows solid design foundations with good visual hierarchy. The implementation plan targets specific improvements in color contrast consistency, spacing refinement, and enhanced interactive elements for a more polished user experience.",
-        detailed: "Strong design foundation with consistent visual patterns and decent accessibility. The implementation plan focuses on systematic improvements including typography hierarchy, spacing standardization, and component refinement for professional-grade quality.",
-        comprehensive: "Well-structured interface with good design consistency. The implementation plan provides comprehensive improvements addressing systematic spacing, enhanced accessibility features, and scalable component architecture for enterprise adoption."
+        basic: `Your UI shows solid design foundations with a score of ${score}. The implementation plan targets specific improvements in color contrast consistency, spacing refinement, and enhanced interactive elements for a more polished user experience.`,
+        detailed: `Strong design foundation (${score}/100) with consistent visual patterns and decent accessibility. The implementation plan focuses on systematic improvements including typography hierarchy, spacing standardization, and component refinement for professional-grade quality.`,
+        comprehensive: `Well-structured interface (${score}/100) with good design consistency. The implementation plan provides comprehensive improvements addressing systematic spacing, enhanced accessibility features, and scalable component architecture for enterprise adoption.`
       },
       fair: {
-        basic: "Your interface needs core usability and accessibility improvements. The implementation plan prioritizes critical fixes including color contrast, navigation enhancement, and spacing consistency to significantly improve user experience.",
-        detailed: "Mixed design quality with some good elements but critical usability issues. The implementation plan addresses fundamental problems including accessibility compliance, visual hierarchy establishment, and systematic design improvements.",
-        comprehensive: "Inconsistent design quality requiring systematic improvements. The implementation plan provides step-by-step solutions for accessibility compliance, design system establishment, and user experience enhancement across all touchpoints."
+        basic: `Your interface needs core usability and accessibility improvements with a score of ${score}. The implementation plan prioritizes critical fixes including color contrast, navigation enhancement, and spacing consistency to significantly improve user experience.`,
+        detailed: `Mixed design quality (${score}/100) with some good elements but critical usability issues. The implementation plan addresses fundamental problems including accessibility compliance, visual hierarchy establishment, and systematic design improvements.`,
+        comprehensive: `Inconsistent design quality (${score}/100) requiring systematic improvements. The implementation plan provides step-by-step solutions for accessibility compliance, design system establishment, and user experience enhancement across all touchpoints.`
       },
       poor: {
-        basic: "Your UI requires substantial improvements to meet modern standards. The implementation plan focuses on critical accessibility fixes, fundamental spacing systems, and basic visual hierarchy establishment.",
-        detailed: "Significant design and accessibility issues requiring comprehensive overhaul. The implementation plan addresses critical problems including contrast compliance, navigation redesign, and systematic design improvements from the ground up.",
-        comprehensive: "Major design and usability challenges requiring complete rethinking. The implementation plan provides comprehensive solutions for accessibility compliance, design system implementation, and user experience transformation."
+        basic: `Your UI requires substantial improvements to meet modern standards with a score of ${score}. The implementation plan focuses on critical accessibility fixes, fundamental spacing systems, and basic visual hierarchy establishment.`,
+        detailed: `Significant design and accessibility issues (${score}/100) requiring comprehensive overhaul. The implementation plan addresses critical problems including contrast compliance, navigation redesign, and systematic design improvements from the ground up.`,
+        comprehensive: `Major design and usability challenges (${score}/100) requiring complete rethinking. The implementation plan provides comprehensive solutions for accessibility compliance, design system implementation, and user experience transformation.`
       }
     };
     
-    return summaries[scoreLevel][analysisType];
+    const summary = summaries[scoreLevel][analysisType];
+    console.log(`Generated summary: ${summary.substring(0, 100)}...`);
+    return summary;
   }
 
   generateDeveloperNotes(score, analysisType) {

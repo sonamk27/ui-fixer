@@ -22,7 +22,7 @@ import ImplementationPlan from './ImplementationPlan';
 const API_BASE_URL = 'http://localhost:5005';
 
 const Dashboard = ({ originalImage, results, onReset }) => {
-  const { report, imageId } = results;
+  const { report, imageId, implementationPlan } = results;
   const [activeNoteTab, setActiveNoteTab] = useState('beginner');
   const [severityFilter, setSeverityFilter] = useState('all');
 
@@ -227,6 +227,7 @@ const Dashboard = ({ originalImage, results, onReset }) => {
         <ImplementationPlan 
           report={report} 
           originalImage={originalImage} 
+          implementationPlan={implementationPlan}
         />
         
         {/* Action Buttons */}
