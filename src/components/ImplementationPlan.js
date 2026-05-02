@@ -4,18 +4,9 @@ import {
   CheckCircle, 
   Clock, 
   AlertCircle, 
-  Code, 
-  Palette, 
-  Type, 
-  Maximize, 
-  Accessibility,
-  Smartphone,
   Download,
   Copy,
-  ChevronRight,
-  Target,
-  Zap,
-  Shield
+  Target
 } from 'lucide-react';
 
 const ImplementationPlan = ({ report, originalImage, implementationPlan }) => {

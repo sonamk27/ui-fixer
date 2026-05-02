@@ -5,7 +5,6 @@ import {
   BarChart3, 
   FileText, 
   AlertCircle, 
-  CheckCircle, 
   Info,
   Layers,
   Type,
@@ -13,16 +12,12 @@ import {
   Maximize,
   Accessibility,
   Smartphone,
-  Download,
-  ExternalLink,
   ChevronRight
 } from 'lucide-react';
 import ImplementationPlan from './ImplementationPlan';
 
-const API_BASE_URL = 'http://localhost:5005';
-
 const Dashboard = ({ originalImage, results, onReset }) => {
-  const { report, imageId, implementationPlan } = results;
+  const { report, implementationPlan } = results;
   const [activeNoteTab, setActiveNoteTab] = useState('beginner');
   const [severityFilter, setSeverityFilter] = useState('all');
 

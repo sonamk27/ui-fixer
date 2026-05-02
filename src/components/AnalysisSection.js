@@ -40,7 +40,7 @@ const AnalysisSection = () => {
     }, 600);
 
     return () => clearInterval(stepInterval);
-  }, []);
+  }, [analysisSteps.length]);
 
   return (
     <section className="min-h-screen flex flex-col justify-center items-center px-6 py-20">
