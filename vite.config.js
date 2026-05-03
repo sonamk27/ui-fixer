@@ -4,19 +4,26 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  root: '.',
-  publicDir: 'public',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    extensions: ['.js', '.jsx', '.ts', '.tsx']
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      loader: {
+        '.js': 'jsx',
+      },
+    },
+  },
+  esbuild: {
+    loader: 'jsx',
+    include: /src\/.*\.js$/,
   },
   build: {
     outDir: 'build',
     sourcemap: true,
-    rollupOptions: {
-      input: './index.html',
-    },
   },
   server: {
     port: 3000,
