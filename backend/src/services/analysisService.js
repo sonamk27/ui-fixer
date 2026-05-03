@@ -905,6 +905,295 @@ Do not add any text or explanation outside these delimiters.`;
     }
   }
 
+  /**
+   * Generate Implementation Plan based on analysis results
+   */
+  generateImplementationPlan(overallScore, annotations, analysisType) {
+    try {
+      console.log('Starting implementation plan generation with score:', overallScore);
+      
+      // Define phases based on score and analysis type
+      const phases = {
+        immediate: {
+          title: "Immediate Fixes (Critical Issues)",
+          icon: "AlertCircle",
+          color: "red",
+          priority: "high",
+          estimatedTime: "2-4 hours",
+          description: `Address critical issues identified in the analysis (${overallScore}/100).`,
+          tasks: this.generateTasksForPhase(annotations, 'critical', overallScore)
+        },
+        short: {
+          title: "Short-term Improvements (1-2 weeks)",
+          icon: "Clock",
+          color: "yellow",
+          priority: "medium",
+          estimatedTime: "1-2 weeks",
+          description: `Implement medium-priority improvements (${overallScore}/100).`,
+          tasks: this.generateTasksForPhase(annotations, 'warning', overallScore)
+        },
+        long: {
+          title: "Long-term Enhancements (1-2 months)",
+          icon: "Target",
+          color: "blue",
+          priority: "low",
+          estimatedTime: "1-2 months",
+          description: `Add advanced features and optimizations (${overallScore}/100).`,
+          tasks: this.generateTasksForPhase(annotations, 'suggestion', overallScore)
+        }
+      };
+
+      // Adjust phases based on analysis type
+      if (analysisType === 'basic') {
+        // Basic analysis gets fewer tasks
+        Object.keys(phases).forEach(phase => {
+          phases[phase].tasks = phases[phase].tasks.slice(0, 2);
+        });
+      } else if (analysisType === 'comprehensive') {
+        // Comprehensive analysis gets more detailed tasks
+        Object.keys(phases).forEach(phase => {
+          phases[phase].tasks = phases[phase].tasks.concat(
+            this.generateAdditionalTasks(phase, overallScore)
+          );
+        });
+      }
+
+      console.log('Implementation plan generation complete');
+      return phases;
+    } catch (error) {
+      console.error('Error generating implementation plan:', error);
+      // Return a basic fallback implementation plan
+      return {
+        immediate: {
+          title: "Immediate Fixes (Critical Issues)",
+          icon: "AlertCircle",
+          color: "red",
+          priority: "high",
+          estimatedTime: "2-4 hours",
+          description: `Address critical issues identified in the analysis (${overallScore}/100).`,
+          tasks: []
+        },
+        short: {
+          title: "Short-term Improvements (1-2 weeks)",
+          icon: "Clock",
+          color: "yellow",
+          priority: "medium",
+          estimatedTime: "1-2 weeks",
+          description: `Implement medium-priority improvements (${overallScore}/100).`,
+          tasks: []
+        },
+        long: {
+          title: "Long-term Enhancements (1-2 months)",
+          icon: "Target",
+          color: "blue",
+          priority: "low",
+          estimatedTime: "1-2 months",
+          description: `Add advanced features and optimizations (${overallScore}/100).`,
+          tasks: []
+        }
+      };
+    }
+  }
+
+  /**
+   * Generate tasks for a specific phase based on annotations
+   */
+  generateTasksForPhase(annotations, severity, overallScore) {
+    const filteredAnnotations = annotations.filter(ann => ann.severity === severity);
+    
+    return filteredAnnotations.map(ann => ({
+      id: ann.id,
+      title: ann.title,
+      description: ann.description,
+      fix: ann.fix,
+      zone: ann.zone,
+      code: this.generateCodeFix(ann),
+      effort: this.calculateEffort(ann),
+      priority: severity === 'critical' ? 'high' : severity === 'warning' ? 'medium' : 'low'
+    }));
+  }
+
+  /**
+   * Generate additional tasks for comprehensive analysis
+   */
+  generateAdditionalTasks(phase, overallScore) {
+    const additionalTasks = {
+      immediate: [
+        {
+          id: 'add_a11y_testing',
+          title: 'Implement Accessibility Testing',
+          description: 'Set up automated accessibility testing in your CI/CD pipeline',
+          fix: 'Add axe-core testing to your test suite and configure accessibility audits',
+          zone: 'general',
+          code: `// Add to your test setup
+import { injectAxe, checkA11y } from 'axe-core';
+
+// Accessibility testing configuration
+const a11yConfig = {
+  rules: {
+    'color-contrast': { enabled: true },
+    'keyboard-navigation': { enabled: true }
+  }
+};`,
+          effort: 'Medium',
+          priority: 'high'
+        }
+      ],
+      short: [
+        {
+          id: 'performance_optimization',
+          title: 'Performance Optimization',
+          description: 'Optimize images and implement lazy loading for better performance',
+          fix: 'Compress images, implement lazy loading, and add performance monitoring',
+          zone: 'performance',
+          code: `// Lazy loading implementation
+const imageObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const img = entry.target;
+      img.src = img.dataset.src;
+      imageObserver.unobserve(img);
+    }
+  });
+});
+
+document.querySelectorAll('img[data-src]').forEach(img => {
+  imageObserver.observe(img);
+});`,
+          effort: 'Medium',
+          priority: 'medium'
+        }
+      ],
+      long: [
+        {
+          id: 'design_system_docs',
+          title: 'Design System Documentation',
+          description: 'Create comprehensive documentation for your design system',
+          fix: 'Document all components, tokens, and usage guidelines',
+          zone: 'documentation',
+          code: `# Design System Documentation
+
+## Color Palette
+- Primary: Used for main actions and branding
+- Secondary: Used for secondary actions
+- Neutral: Used for text and backgrounds
+
+## Typography
+- Use consistent font sizes and weights
+- Maintain proper line heights for readability
+
+## Spacing
+- Follow 8px grid system
+- Use consistent margins and padding`,
+          effort: 'Low',
+          priority: 'low'
+        }
+      ]
+    };
+
+    return additionalTasks[phase] || [];
+  }
+
+  /**
+   * Generate code fix for an annotation
+   */
+  generateCodeFix(annotation) {
+    const fixes = {
+      button: `/* Fix for ${annotation.title} */
+.button {
+  background-color: #1D4ED8;
+  color: #FFFFFF;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.button:hover {
+  background-color: #1E40AF;
+  transform: translateY(-1px);
+}`,
+      form: `/* Fix for ${annotation.title} */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #D1D5DB;
+  border-radius: 0.375rem;
+}`,
+      nav: `/* Fix for ${annotation.title} */
+.nav-link {
+  padding: 0.5rem 1rem;
+  color: #6B7280;
+  text-decoration: none;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+}
+
+.nav-link:hover {
+  color: #1D4ED8;
+  background-color: #F3F4F6;
+}`,
+      hero: `/* Fix for ${annotation.title} */
+.hero-title {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #111827;
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1.6;
+  color: #6B7280;
+}`,
+      card: `/* Fix for ${annotation.title} */
+.card {
+  background: #FFFFFF;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}`,
+      general: `/* Fix for ${annotation.title} */
+.general-fix {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}`
+    };
+
+    return fixes[annotation.zone] || fixes.general;
+  }
+
+  /**
+   * Calculate effort for an annotation
+   */
+  calculateEffort(annotation) {
+    const efforts = {
+      button: "Low",
+      form: "Medium", 
+      nav: "Medium",
+      hero: "High",
+      card: "Medium",
+      general: "Low"
+    };
+    return efforts[annotation.zone] || "Medium";
+  }
+
   generateColorPalette(score, contrastGrade) {
     const baseColors = {
       primary: contrastGrade < 70 ? '#1D4ED8' : '#3B82F6', // Higher contrast for poor contrast grades
