@@ -30,7 +30,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "react-scripts start",
-    "build": "DISABLE_ESLINT_PLUGIN=true npx vite build",
+    "build": "DISABLE_ESLINT_PLUGIN=true vite build",
     "vercel-build": "npm run build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
