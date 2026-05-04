@@ -1,0 +1,15 @@
+tensorflow
+opencv-python
+numpy
+# UI-Fixer backend dependencies
+# Install with: pip install -r requirements.txt
+
+flask==3.0.3
+flask-cors==4.0.1
+Pillow==10.3.0
+torch==2.3.0
+torchvision==0.18.0
+transformers==4.41.0        # for CLIP / ViT scorer
+ultralytics==8.2.0          # for YOLOv8 detector
+numpy==1.26.4
+gunicorn==22.0.0             # production server (not needed for dev)

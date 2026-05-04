@@ -1,17 +1,20 @@
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
-import { Upload, Image, FileImage, X, Check } from 'lucide-react';
+import { Upload, Image, FileImage, X, Check, Loader } from 'lucide-react';
 
 const UploadSection = ({ onImageUpload }) => {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);  // ← loading state
+  const [error, setError] = useState(null);               // ← error state
 
   const onDrop = useCallback((acceptedFiles) => {
     const file = acceptedFiles[0];
     if (file) {
       setUploadedFile(file);
+      setError(null);
       const reader = new FileReader();
       reader.onload = () => {
         setPreview(reader.result);
@@ -32,15 +35,46 @@ const UploadSection = ({ onImageUpload }) => {
     onDropRejected: () => setIsDragging(false)
   });
 
-  const handleAnalyze = () => {
-    if (uploadedFile) {
-      onImageUpload(uploadedFile, preview);
+  const handleAnalyze = async () => {
+    if (!uploadedFile || !preview) return;
+
+    setIsAnalyzing(true);
+    setError(null);
+
+    try {
+      // preview is already a base64 data URI from FileReader
+      // Send it directly to the Flask backend
+      const response = await fetch('http://127.0.0.1:5000/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: preview })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Pass the file, preview AND the AI results up to the parent (App.jsx)
+      // result = { type, score, suggestions, boxes }
+      onImageUpload(uploadedFile, preview, result);
+
+    } catch (err) {
+      setError(err.message || 'Failed to analyze image. Is the backend running?');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
   const handleRemoveFile = () => {
     setUploadedFile(null);
     setPreview(null);
+    setError(null);
   };
 
   return (
@@ -201,16 +235,42 @@ const UploadSection = ({ onImageUpload }) => {
                       <span className="text-green-400">Ready to analyze</span>
                     </div>
                   </div>
+
+                  {/* Error message */}
+                  {error && (
+                    <motion.div
+                      className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      ⚠️ {error}
+                    </motion.div>
+                  )}
                 </div>
 
                 {/* Analyze button */}
                 <motion.button
                   onClick={handleAnalyze}
-                  className="w-full py-4 bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl font-semibold btn-glow hover:from-purple-700 hover:to-blue-700 transition-all duration-300 mt-6"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  disabled={isAnalyzing}
+                  className={`
+                    w-full py-4 rounded-xl font-semibold transition-all duration-300 mt-6
+                    flex items-center justify-center gap-3
+                    ${isAnalyzing
+                      ? 'bg-purple-600/50 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-purple-600 to-blue-600 btn-glow hover:from-purple-700 hover:to-blue-700'
+                    }
+                  `}
+                  whileHover={!isAnalyzing ? { scale: 1.02 } : {}}
+                  whileTap={!isAnalyzing ? { scale: 0.98 } : {}}
                 >
-                  Analyze with AI
+                  {isAnalyzing ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      Analyzing with AI...
+                    </>
+                  ) : (
+                    'Analyze with AI'
+                  )}
                 </motion.button>
               </div>
             </div>

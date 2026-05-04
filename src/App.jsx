@@ -8,80 +8,23 @@ import ChatAssistant from './components/ChatAssistant';
 import Navigation from './components/Navigation';
 import './index.css';
 
-const API_BASE_URL = 'http://localhost:5005';
-
 function App() {
   const [currentSection, setCurrentSection] = useState('landing');
   const [uploadedImage, setUploadedImage] = useState(null);
   const [analysisData, setAnalysisData] = useState(null);
 
-  const handleImageUpload = async (file, preview) => {
+  // Called by UploadSection once the backend returns results
+  // result = { type, score, suggestions, boxes }
+  const handleImageUpload = (file, preview, result) => {
     setUploadedImage(preview);
+
+    // Show the animated analysis screen briefly, then go to results
     setCurrentSection('analysis');
 
-    try {
-      // 1. Upload the image
-      const formData = new FormData();
-      formData.append('image', file);
-
-      let uploadResponse;
-      try {
-        uploadResponse = await fetch(`${API_BASE_URL}/api/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-      } catch (networkErr) {
-        throw new Error(`Cannot reach the backend server at ${API_BASE_URL}. Make sure it is running with "npm run dev" in the /backend folder.`);
-      }
-
-      if (!uploadResponse.ok) {
-        let errMsg = `Upload failed (HTTP ${uploadResponse.status})`;
-        try {
-          const errBody = await uploadResponse.json();
-          errMsg = errBody?.error?.message || errMsg;
-        } catch (_) {}
-        throw new Error(errMsg);
-      }
-
-      const uploadData = await uploadResponse.json();
-      const imageId = uploadData?.data?.id;
-
-      if (!imageId) {
-        throw new Error('Upload succeeded but no imageId was returned from the backend.');
-      }
-
-      console.log('Upload successful, imageId:', imageId);
-
-      // 2. Perform analysis
-      const analysisResponse = await fetch(`${API_BASE_URL}/api/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageId, analysisType: 'detailed' }),
-      });
-
-      if (!analysisResponse.ok) {
-        let errMsg = `Analysis failed (HTTP ${analysisResponse.status})`;
-        try {
-          const errBody = await analysisResponse.json();
-          errMsg = errBody?.error?.message || errMsg;
-        } catch (_) {}
-        throw new Error(errMsg);
-      }
-
-      const analysisResult = await analysisResponse.json();
-      console.log('Analysis successful:', analysisResult);
-
-      // Give a small delay to allow the animation to feel natural
-      setTimeout(() => {
-        setAnalysisData(analysisResult.data);
-        setCurrentSection('results');
-      }, 1500);
-
-    } catch (error) {
-      console.error('Error during analysis:', error);
-      alert('Error: ' + (error.message || 'Something went wrong. Is the backend server running?'));
-      setCurrentSection('upload');
-    }
+    setTimeout(() => {
+      setAnalysisData(result);
+      setCurrentSection('results');
+    }, 1500);
   };
 
   const handleReset = () => {
@@ -111,15 +54,15 @@ function App() {
             {currentSection === 'landing' && (
               <LandingSection onGetStarted={() => setCurrentSection('upload')} />
             )}
-            
+
             {currentSection === 'upload' && (
               <UploadSection onImageUpload={handleImageUpload} />
             )}
-            
+
             {currentSection === 'analysis' && (
               <AnalysisSection />
             )}
-            
+
             {currentSection === 'results' && (
               <Dashboard
                 originalImage={uploadedImage}
@@ -130,7 +73,7 @@ function App() {
           </motion.div>
         </AnimatePresence>
       </main>
-      
+
       {/* Chat Assistant - always visible */}
       <ChatAssistant />
     </div>
