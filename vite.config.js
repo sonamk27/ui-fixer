@@ -10,10 +10,6 @@ export default defineConfig({
     },
     extensions: ['.js', '.jsx', '.ts', '.tsx']
   },
-  esbuild: {
-    loader: 'jsx',
-    include: /src\/.*\.js$/,
-  },
   build: {
     outDir: 'build',
     sourcemap: true,
