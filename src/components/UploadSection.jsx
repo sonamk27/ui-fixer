@@ -7,8 +7,8 @@ const UploadSection = ({ onImageUpload }) => {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);  // ← loading state
-  const [error, setError] = useState(null);               // ← error state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [error, setError] = useState(null);
 
   const onDrop = useCallback((acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -42,12 +42,10 @@ const UploadSection = ({ onImageUpload }) => {
     setError(null);
 
     try {
-      // preview is already a base64 data URI from FileReader
-      // Send it directly to the Flask backend
-      const response = await fetch('http://127.0.0.1:5000/api/analyze', {
+      const response = await fetch('http://127.0.0.1:5001/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: preview })
+        body: JSON.stringify({ image: preview }),
       });
 
       if (!response.ok) {
@@ -60,8 +58,6 @@ const UploadSection = ({ onImageUpload }) => {
         throw new Error(result.error);
       }
 
-      // Pass the file, preview AND the AI results up to the parent (App.jsx)
-      // result = { type, score, suggestions, boxes }
       onImageUpload(uploadedFile, preview, result);
 
     } catch (err) {
@@ -96,7 +92,7 @@ const UploadSection = ({ onImageUpload }) => {
             <span className="gradient-text">Upload Your UI</span>
           </h2>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-            Drag and drop your UI screenshot or click to browse. 
+            Drag and drop your UI screenshot or click to browse.
             We support PNG, JPG, and WebP formats.
           </p>
         </motion.div>
@@ -108,8 +104,8 @@ const UploadSection = ({ onImageUpload }) => {
             className={`
               relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer
               transition-all duration-300 min-h-[400px] flex flex-col items-center justify-center
-              ${isDragging 
-                ? 'border-purple-500 bg-purple-500/10 scale-[1.02]' 
+              ${isDragging
+                ? 'border-purple-500 bg-purple-500/10 scale-[1.02]'
                 : 'border-gray-600 hover:border-purple-400 bg-dark-card/50 hover:bg-purple-500/5'
               }
             `}
@@ -117,8 +113,7 @@ const UploadSection = ({ onImageUpload }) => {
             whileTap={{ scale: 0.98 }}
           >
             <input {...getInputProps()} />
-            
-            {/* Upload icon with animation */}
+
             <motion.div
               className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center mb-6"
               animate={isDragging ? { scale: [1, 1.1, 1] } : { scale: 1 }}
@@ -138,7 +133,6 @@ const UploadSection = ({ onImageUpload }) => {
               or click to browse from your computer
             </p>
 
-            {/* Supported formats */}
             <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
               <div className="flex items-center gap-2">
                 <FileImage className="w-4 h-4" />
@@ -154,34 +148,16 @@ const UploadSection = ({ onImageUpload }) => {
               </div>
             </div>
 
-            {/* Animated corner indicators */}
             {isDragActive && (
               <>
-                <motion.div
-                  className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-purple-500"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                />
-                <motion.div
-                  className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-purple-500"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                />
-                <motion.div
-                  className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-purple-500"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                />
-                <motion.div
-                  className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-purple-500"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                />
+                <motion.div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-purple-500" initial={{ opacity: 0 }} animate={{ opacity: 1 }} />
+                <motion.div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-purple-500" initial={{ opacity: 0 }} animate={{ opacity: 1 }} />
+                <motion.div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-purple-500" initial={{ opacity: 0 }} animate={{ opacity: 1 }} />
+                <motion.div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-purple-500" initial={{ opacity: 0 }} animate={{ opacity: 1 }} />
               </>
             )}
           </motion.div>
         ) : (
-          /* File preview */
           <motion.div
             className="glass-dark rounded-2xl p-8 border border-purple-500/30"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -236,7 +212,6 @@ const UploadSection = ({ onImageUpload }) => {
                     </div>
                   </div>
 
-                  {/* Error message */}
                   {error && (
                     <motion.div
                       className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
@@ -248,7 +223,6 @@ const UploadSection = ({ onImageUpload }) => {
                   )}
                 </div>
 
-                {/* Analyze button */}
                 <motion.button
                   onClick={handleAnalyze}
                   disabled={isAnalyzing}
@@ -277,7 +251,6 @@ const UploadSection = ({ onImageUpload }) => {
           </motion.div>
         )}
 
-        {/* Tips */}
         <motion.div
           className="mt-12 text-center"
           initial={{ opacity: 0 }}

@@ -8,21 +8,30 @@ import ChatAssistant from './components/ChatAssistant';
 import Navigation from './components/Navigation';
 import './index.css';
 
+
 function App() {
   const [currentSection, setCurrentSection] = useState('landing');
   const [uploadedImage, setUploadedImage] = useState(null);
   const [analysisData, setAnalysisData] = useState(null);
 
-  // Called by UploadSection once the backend returns results
-  // result = { type, score, suggestions, boxes }
   const handleImageUpload = (file, preview, result) => {
     setUploadedImage(preview);
-
-    // Show the animated analysis screen briefly, then go to results
     setCurrentSection('analysis');
 
     setTimeout(() => {
-      setAnalysisData(result);
+      setAnalysisData({
+        overall_score:   result.score       ?? 0,
+        ui_type:         result.type        ?? 'Unknown Screen',
+        suggestions:     result.suggestions ?? [],
+        boxes:           result.boxes       ?? [],
+        errors: (result.boxes ?? []).map(box => ({
+          dimension: box.label,
+          score:     Math.round((1 - box.confidence) * 100),
+          severity:  box.confidence >= 0.8 ? 'high' : box.confidence >= 0.6 ? 'medium' : 'low',
+          message:   box.label,
+        })),
+        dimension_scores: null,
+      });
       setCurrentSection('results');
     }, 1500);
   };
@@ -37,10 +46,10 @@ function App() {
     <div className="min-h-screen bg-dark-bg bg-grid text-white relative overflow-hidden">
       {/* Background gradient */}
       <div className="fixed inset-0 bg-gradient-radial from-purple-900/20 via-transparent to-transparent pointer-events-none" />
-      
+
       {/* Navigation */}
       <Navigation currentSection={currentSection} onReset={handleReset} />
-      
+
       {/* Main content */}
       <main className="relative z-10">
         <AnimatePresence mode="wait">
