@@ -1,103 +1,127 @@
-from transformers import CLIPProcessor, CLIPModel
-from PIL import Image
-import torch
+import numpy as np
+from PIL import Image, ImageFilter
+import colorsys
 
-# ── Load CLIP model once when the module is imported ─────────────────────────
-# openai/clip-vit-base-patch32 is a good balance of speed and accuracy.
-# Auto-downloads on first run (~600MB).
-_clip_model     = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-_clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-_clip_model.eval()
+SUGGESTIONS_MAP = {
+    "color_contrast":   "Increase text-to-background contrast to at least 4.5:1 (WCAG AA).",
+    "whitespace":       "Add more padding between sections to reduce visual clutter.",
+    "color_variety":    "Use a more distinct color palette to improve visual interest.",
+    "edge_clarity":     "Improve element boundaries and separation for better readability.",
+    "brightness":       "Adjust overall brightness for better readability and accessibility.",
+    "visual_balance":   "Balance the visual weight across different sections of the UI.",
+    "color_harmony":    "Use a consistent color scheme with complementary colors.",
+    "simplicity":       "Reduce visual complexity to improve user focus and clarity.",
+}
 
-# ── Text prompts used to score UI quality ─────────────────────────────────────
-# CLIP compares the screenshot against these text descriptions.
-# Higher similarity to "good" prompts = higher score.
+SCORE_THRESHOLD = 55
 
-GOOD_PROMPTS = [
-    "a clean and well-designed user interface",
-    "a professional and modern UI with good spacing",
-    "a visually consistent and accessible web design",
-    "a well-aligned and readable user interface",
-    "a polished app screen with clear typography",
-]
 
-BAD_PROMPTS = [
-    "a broken and poorly designed user interface",
-    "a cluttered and hard to read UI",
-    "a messy layout with overlapping elements",
-    "a UI with bad contrast and poor readability",
-    "a poorly aligned and inconsistent design",
-]
+def _analyze_image_properties(image: Image.Image) -> dict:
+    """
+    Analyze actual image pixel properties to derive meaningful scores.
+    Each dimension is based on real image characteristics.
+    """
+    # Resize for faster processing
+    img_small = image.resize((256, 256))
+    img_array = np.array(img_small).astype(float)
 
-# ── Suggestion templates based on score range ─────────────────────────────────
-def _generate_suggestions(score: int, bad_similarities: list) -> list:
-    suggestions = []
+    # ── 1. Color contrast (std deviation of pixel values) ──────────────────
+    gray = np.mean(img_array, axis=2)
+    contrast_score = min(100, float(np.std(gray)) * 2.5)
 
-    if score < 40:
-        suggestions.append("Major layout issues detected — review overall structure and alignment.")
-    if score < 55:
-        suggestions.append("Improve visual hierarchy by using consistent font sizes and weights.")
-    if score < 70:
-        suggestions.append("Check spacing between elements — use consistent padding and margins.")
-    if bad_similarities[3] > 0.25:   # bad contrast prompt triggered
-        suggestions.append("Increase color contrast between text and background for accessibility.")
-    if bad_similarities[2] > 0.25:   # overlapping elements prompt triggered
-        suggestions.append("Fix overlapping UI elements — ensure each component has enough space.")
-    if bad_similarities[1] > 0.25:   # cluttered prompt triggered
-        suggestions.append("Reduce visual clutter — remove unnecessary elements or group related ones.")
-    if score >= 70:
-        suggestions.append("Good overall design! Consider fine-tuning spacing and typography.")
-    if score >= 85:
-        suggestions.append("Excellent UI! Minor polish — check alignment on all screen sizes.")
+    # ── 2. Whitespace (percentage of near-white pixels) ────────────────────
+    white_mask = np.all(img_array > 220, axis=2)
+    white_ratio = float(np.mean(white_mask))
+    # Good whitespace = 15-40% white pixels
+    if 0.15 <= white_ratio <= 0.40:
+        whitespace_score = 75 + white_ratio * 50
+    elif white_ratio < 0.15:
+        whitespace_score = white_ratio * 400  # too little whitespace
+    else:
+        whitespace_score = max(40, 100 - (white_ratio - 0.40) * 200)
+    whitespace_score = min(100, max(20, whitespace_score))
 
-    # Always include at least one suggestion
-    if not suggestions:
-        suggestions.append("UI looks good — consider testing with real users for feedback.")
+    # ── 3. Color variety (number of distinct hue ranges) ───────────────────
+    r, g, b = img_array[:,:,0], img_array[:,:,1], img_array[:,:,2]
+    hues = []
+    for i in range(0, 256, 8):
+        for j in range(0, 256, 8):
+            rv, gv, bv = r[i,j]/255, g[i,j]/255, b[i,j]/255
+            h, s, v = colorsys.rgb_to_hsv(rv, gv, bv)
+            if s > 0.2:  # only count saturated colors
+                hues.append(int(h * 12))  # 12 hue buckets
+    unique_hues = len(set(hues))
+    # Good UI = 2-5 distinct hues
+    if 2 <= unique_hues <= 5:
+        color_variety_score = 70 + unique_hues * 5
+    elif unique_hues < 2:
+        color_variety_score = 40 + unique_hues * 15
+    else:
+        color_variety_score = max(45, 95 - (unique_hues - 5) * 8)
+    color_variety_score = min(100, max(20, color_variety_score))
 
-    return suggestions[:4]   # return max 4 suggestions
+    # ── 4. Edge clarity (edge density from sobel-like filter) ──────────────
+    img_pil_gray = img_small.convert('L')
+    edges = img_pil_gray.filter(ImageFilter.FIND_EDGES)
+    edge_array = np.array(edges).astype(float)
+    edge_density = float(np.mean(edge_array)) / 255.0
+    # Good UI = moderate edge density (clear elements but not cluttered)
+    if 0.05 <= edge_density <= 0.20:
+        edge_score = 70 + edge_density * 150
+    elif edge_density < 0.05:
+        edge_score = edge_density * 800  # too few edges = boring
+    else:
+        edge_score = max(40, 95 - (edge_density - 0.20) * 200)
+    edge_score = min(100, max(20, edge_score))
+
+    # ── 5. Brightness (mean luminance — should be moderate) ────────────────
+    luminance = float(np.mean(gray)) / 255.0
+    if 0.3 <= luminance <= 0.75:
+        brightness_score = 75 + (1 - abs(luminance - 0.525) * 4) * 25
+    else:
+        brightness_score = max(30, 60 - abs(luminance - 0.525) * 100)
+    brightness_score = min(100, max(20, brightness_score))
+
+    # ── 6. Visual balance (left vs right half similarity) ──────────────────
+    left_half  = gray[:, :128]
+    right_half = gray[:, 128:]
+    balance_diff = abs(float(np.mean(left_half)) - float(np.mean(right_half)))
+    balance_score = max(30, 100 - balance_diff * 2)
+
+    # ── 7. Color harmony (hue spread evenness) ─────────────────────────────
+    if len(hues) > 0:
+        hue_std = float(np.std(hues)) if len(hues) > 1 else 0
+        harmony_score = min(100, max(30, 80 - abs(hue_std - 3) * 5))
+    else:
+        harmony_score = 50
+
+    # ── 8. Simplicity (inverse of visual complexity) ───────────────────────
+    complexity = edge_density * 100 + float(np.std(img_array)) / 5
+    simplicity_score = max(20, min(100, 100 - complexity * 0.8))
+
+    return {
+        "color_contrast":  round(contrast_score, 1),
+        "whitespace":      round(whitespace_score, 1),
+        "color_variety":   round(color_variety_score, 1),
+        "edge_clarity":    round(edge_score, 1),
+        "brightness":      round(brightness_score, 1),
+        "visual_balance":  round(balance_score, 1),
+        "color_harmony":   round(harmony_score, 1),
+        "simplicity":      round(simplicity_score, 1),
+    }
 
 
 def score_ui(image: Image.Image):
     """
-    Uses CLIP to score UI quality by comparing the screenshot against
-    good and bad UI description prompts.
-
-    Args:
-        image : PIL Image (RGB)
-
-    Returns:
-        (score: int 0-100, suggestions: list[str])
+    Takes a PIL Image.
+    Returns (score: int, suggestions: list[str])
     """
-    # ── 1. Prepare inputs ─────────────────────────────────────────────────────
-    all_prompts = GOOD_PROMPTS + BAD_PROMPTS
+    props = _analyze_image_properties(image)
+    suggestions = []
 
-    inputs = _clip_processor(
-        text=all_prompts,
-        images=image,
-        return_tensors="pt",
-        padding=True
-    )
+    for dimension, score in props.items():
+        if score < SCORE_THRESHOLD:
+            suggestions.append(SUGGESTIONS_MAP.get(dimension, f"Improve {dimension.replace('_', ' ')}."))
 
-    # ── 2. Run CLIP inference ─────────────────────────────────────────────────
-    with torch.no_grad():
-        outputs    = _clip_model(**inputs)
-        logits     = outputs.logits_per_image   # shape: (1, num_prompts)
-        probs      = logits.softmax(dim=1)[0]   # normalize to probabilities
-
-    # ── 3. Split good vs bad probabilities ───────────────────────────────────
-    n_good = len(GOOD_PROMPTS)
-    good_probs = probs[:n_good].tolist()
-    bad_probs  = probs[n_good:].tolist()
-
-    good_score = sum(good_probs) / len(good_probs)
-    bad_score  = sum(bad_probs)  / len(bad_probs)
-
-    # ── 4. Calculate final score (0-100) ─────────────────────────────────────
-    # good_score high + bad_score low = high final score
-    raw_score = (good_score - bad_score + 1) / 2   # normalize to 0-1
-    score     = int(max(0, min(100, raw_score * 100)))
-
-    # ── 5. Generate suggestions based on score and bad prompt similarities ────
-    suggestions = _generate_suggestions(score, bad_probs)
-
-    return score, suggestions
+    overall_score = int(round(float(np.mean(list(props.values())))))
+    return overall_score, suggestions

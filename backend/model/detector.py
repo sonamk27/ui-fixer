@@ -219,17 +219,18 @@ def detect_errors(image: Image.Image, original_size=None) -> list:
     w, h = original_size if original_size else image.size
 
     boxes = []
-    num_errors = len(quality_results["errors"])
     for i, err in enumerate(quality_results["errors"]):
-        # Divide image into horizontal bands per error
-        band_h = h // max(num_errors, 1)
+        box_w = int(w * 0.3)
+        box_h = int(h * 0.08)
+        x = (i % 2) * int(w * 0.6)
+        y = i * (box_h + 10)
         boxes.append({
             "label":      err["message"],
             "confidence": round(1 - (err["score"] / 100), 2),
-            "x":          0,
-            "y":          i * band_h,
-            "width":      w,
-            "height":     band_h,
+            "x":          x,
+            "y":          y,
+            "width":      box_w,
+            "height":     box_h,
         })
     return boxes
 

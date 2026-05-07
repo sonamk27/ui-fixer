@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
@@ -33,6 +34,20 @@ def _build_model():
     model.classifier[1] = nn.Linear(in_features, NUM_CLASSES)
 
     model.eval()
+    
+    # Try to load fine-tuned weights if available
+    try:
+        checkpoint_path = "model/fine_tuned_classifier_best.pth"
+        if os.path.exists(checkpoint_path):
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+            model.load_state_dict(checkpoint['model_state_dict'])
+            print(f"Loaded fine-tuned weights from {checkpoint_path}")
+        else:
+            print("No fine-tuned weights found, using ImageNet pretrained weights")
+    except Exception as e:
+        print(f"Failed to load fine-tuned weights: {e}")
+        print("Using ImageNet pretrained weights")
+    
     return model
 
 _model = _build_model()

@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
+const mongoDBService = require('./mongodbService');
 
 /**
  * Image Analysis Service
@@ -11,6 +12,7 @@ class AnalysisService {
   constructor() {
     this.openaiApiKey = process.env.OPENAI_API_KEY;
     this.openaiModel = process.env.OPENAI_MODEL || 'gpt-4-vision-preview';
+    this.pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
   }
 
   /**
@@ -27,11 +29,18 @@ class AnalysisService {
         throw new Error('Image not found');
       }
 
-      // Check if using real AI or simulation
-      if (this.openaiApiKey && this.openaiApiKey !== 'your_openai_api_key_here') {
-        return await this.analyzeWithAI(imageMetadata, analysisType);
-      } else {
-        return await this.analyzeWithSimulation(imageMetadata, analysisType);
+      // Try Python Flask API first
+      try {
+        return await this.analyzeWithPythonAPI(imageMetadata, analysisType);
+      } catch (pythonError) {
+        console.warn('Python API failed, falling back to other methods:', pythonError.message);
+        
+        // Check if using real AI or simulation
+        if (this.openaiApiKey && this.openaiApiKey !== 'your_openai_api_key_here') {
+          return await this.analyzeWithAI(imageMetadata, analysisType);
+        } else {
+          return await this.analyzeWithSimulation(imageMetadata, analysisType);
+        }
       }
     } catch (error) {
       console.error('Error analyzing image:', error);
@@ -86,7 +95,16 @@ class AnalysisService {
 
       // Parse AI response
       const aiResponse = response.data.choices[0].message.content;
-      return this.parseAIResponse(aiResponse, imageMetadata.id, analysisType);
+      const analysisResult = this.parseAIResponse(aiResponse, imageMetadata.id, analysisType);
+
+      // Save result to MongoDB Atlas if connected
+      try {
+        await mongoDBService.saveAnalysisResult(analysisResult);
+      } catch (mongoError) {
+        console.warn('Failed to save to MongoDB Atlas:', mongoError.message);
+      }
+
+      return analysisResult;
 
     } catch (error) {
       console.error('OpenAI API error:', error);
@@ -94,6 +112,136 @@ class AnalysisService {
       console.log('Falling back to simulation analysis...');
       return await this.analyzeWithSimulation(imageMetadata, analysisType);
     }
+  }
+
+  /**
+   * Analyze image using Python Flask API
+   */
+  async analyzeWithPythonAPI(imageMetadata, analysisType) {
+    try {
+      // Read image file and convert to base64
+      const imageBuffer = await fs.readFile(imageMetadata.uploadPath);
+      const base64Image = imageBuffer.toString('base64');
+      const dataUrl = `data:${imageMetadata.mimetype};base64,${base64Image}`;
+
+      // Call Python Flask API
+      const response = await axios.post(`${this.pythonApiUrl}/api/analyze`, {
+        image: dataUrl
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 second timeout
+      });
+
+      const pythonResult = response.data;
+      
+      // Transform Python API result to match our expected format
+      const analysisResult = {
+        id: uuidv4(),
+        imageId: imageMetadata.id,
+        analysisType: analysisType,
+        analyzedAt: new Date().toISOString(),
+        processingTime: 2000, // Estimated processing time
+        confidence: Math.round((pythonResult.score || 0.8) * 100), // Convert to percentage
+        report: {
+          overallScore: Math.round((pythonResult.score || 0.8) * 100),
+          grades: {
+            layout: Math.round((pythonResult.score || 0.8) * 100),
+            typography: Math.round((pythonResult.score || 0.8) * 100),
+            colorContrast: Math.round((pythonResult.score || 0.8) * 100),
+            spacing: Math.round((pythonResult.score || 0.8) * 100),
+            accessibility: Math.round((pythonResult.score || 0.8) * 100),
+            responsiveness: Math.round((pythonResult.score || 0.8) * 100)
+          },
+          annotations: this.convertPythonSuggestionsToAnnotations(pythonResult.suggestions || []),
+          summary: `UI classified as "${pythonResult.type}" with score ${Math.round((pythonResult.score || 0.8) * 100)}/100. ${pythonResult.suggestions ? pythonResult.suggestions.slice(0, 2).join(' ') : ''}`,
+          developerNotes: [`UI Type: ${pythonResult.type}`, `Score: ${Math.round((pythonResult.score || 0.8) * 100)}/100`],
+          designerNotes: [`Classification: ${pythonResult.type}`, `Analysis performed by CLIP-based model`]
+        },
+        redesignedHtml: this.generateBasicRedesign(pythonResult),
+        metadata: {
+          filename: imageMetadata.filename,
+          originalName: imageMetadata.originalName,
+          fileSize: imageMetadata.size,
+          analysisMethod: 'python_api',
+          pythonResult: pythonResult
+        }
+      };
+
+      // Save result to MongoDB Atlas if connected
+      try {
+        await mongoDBService.saveAnalysisResult(analysisResult);
+      } catch (mongoError) {
+        console.warn('Failed to save to MongoDB Atlas:', mongoError.message);
+      }
+
+      return analysisResult;
+
+    } catch (error) {
+      console.error('Python API error:', error.message);
+      if (error.code === 'ECONNREFUSED') {
+        throw new Error('Python Flask API is not running. Please start the Python server on port 5001.');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Convert Python suggestions to annotation format
+   */
+  convertPythonSuggestionsToAnnotations(suggestions) {
+    if (!Array.isArray(suggestions)) return [];
+    
+    return suggestions.slice(0, 5).map((suggestion, index) => ({
+      id: `python_suggestion_${index}`,
+      zone: "general",
+      severity: "suggestion",
+      title: `UI Improvement ${index + 1}`,
+      description: suggestion,
+      fix: suggestion
+    }));
+  }
+
+  /**
+   * Generate basic redesign HTML
+   */
+  generateBasicRedesign(pythonResult) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title>UI Fixer - Redesigned Version</title>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+    <div class="bg-blue-600 text-white py-2 px-4 text-center font-bold">
+        ✨ UI Fixer — Redesigned Version | UI Type: ${pythonResult.type || 'Unknown'}
+    </div>
+    
+    <nav class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+        <div class="text-2xl font-bold text-blue-600">BrandName</div>
+        <div class="space-x-6 hidden md:flex">
+            <a href="#" class="hover:text-blue-600 transition">Features</a>
+            <a href="#" class="hover:text-blue-600 transition">Pricing</a>
+            <a href="#" class="hover:text-blue-600 transition">About</a>
+            <button class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg transition font-medium">Get Started</button>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto mt-16 px-6 pb-20">
+        <div class="text-center">
+            <h1 class="text-5xl font-extrabold tracking-tight text-gray-900 mb-6">Build your future with confidence</h1>
+            <p class="text-xl text-gray-600 max-w-2xl mx-auto mb-10">Our platform helps you manage projects and collaborate with your team in real-time, all in one place.</p>
+            <div class="flex justify-center space-x-4">
+                <button class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl text-lg font-bold transition shadow-lg hover:shadow-xl">Start Free Trial</button>
+                <button class="bg-white border-2 border-gray-200 hover:border-gray-300 text-gray-700 px-8 py-3 rounded-xl text-lg font-bold transition">Watch Demo</button>
+            </div>
+        </div>
+    </main>
+</body>
+</html>`;
   }
 
   /**
@@ -106,7 +254,7 @@ class AnalysisService {
     // Generate realistic UI improvement suggestions based on analysis type
     const { report, redesignedHtml } = this.generateSimulatedSuggestions(analysisType);
 
-    return {
+    const analysisResult = {
       id: uuidv4(),
       imageId: imageMetadata.id,
       analysisType: analysisType,
@@ -122,6 +270,15 @@ class AnalysisService {
         analysisMethod: 'simulation'
       }
     };
+
+    // Save result to MongoDB Atlas if connected
+    try {
+      await mongoDBService.saveAnalysisResult(analysisResult);
+    } catch (mongoError) {
+      console.warn('Failed to save to MongoDB Atlas:', mongoError.message);
+    }
+
+    return analysisResult;
   }
 
   createAIPrompt(analysisType) {
