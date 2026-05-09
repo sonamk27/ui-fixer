@@ -1,3 +1,19 @@
+terminal 1:
+cd c:\Users\sonam\OneDrive\Desktop\Projects\ui-fixer\backend
+pip install -r requirements.txt 
+python app.py
+
+terminal 2:
+cd c:\Users\sonam\OneDrive\Desktop\Projects\ui-fixer
+npm install  
+npm run dev
+
+terminal 3:
+cd c:\Users\sonam\OneDrive\Desktop\Projects\ui-fixer\backend
+npm install  
+npm run dev
+
+
 # UI Fixer Backend API
 
 A comprehensive backend API for the UI Fixer application that provides AI-powered UI improvement suggestions. Built with Node.js, Express.js, and MongoDB.
