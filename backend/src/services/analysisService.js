@@ -282,66 +282,87 @@ class AnalysisService {
   }
 
   createAIPrompt(analysisType) {
-    return `You are an expert UI/UX designer and frontend developer.
+    const detailLevel = analysisType === 'comprehensive' ? 6 : analysisType === 'detailed' ? 4 : 3;
 
-The user has uploaded a screenshot of their website or app UI.
+    return `You are UI-Fixer, an expert UI/UX auditor with 10+ years of experience.
+
+<system>
+You are UI-Fixer, expert UI/UX auditor. Return ONLY valid JSON inside the delimiters below. No explanations outside the delimiters.
+</system>
+
+Analyze the provided UI screenshot. Score 0–100 across 5 metrics. Identify up to ${detailLevel} issues.
 
 Your job has TWO parts:
 
 ─────────────────────────────────────────
-PART 1 — VISUAL ANALYSIS REPORT
+PART 1 — ANALYSIS REPORT (JSON)
 ─────────────────────────────────────────
-Analyze the uploaded UI screenshot and return a structured JSON report with:
+Return a JSON object with this EXACT structure:
 
-1. "overallScore": A number from 0–100 rating the UI quality overall.
+{
+  "overallScore": <0-100 integer>,
+  "categoryScores": {
+    "layout": <0-100>,
+    "typography": <0-100>,
+    "color": <0-100>,
+    "hierarchy": <0-100>,
+    "consistency": <0-100>
+  },
+  "topIssues": [
+    {
+      "issue": "<concise issue title>",
+      "severity": "high | medium | low",
+      "location": "<specific screen location, e.g. 'top-right nav', 'hero CTA button'>"
+    }
+  ],
+  "quickFixes": [
+    "<copy-paste actionable fix with exact values, e.g. 'Set CTA button min-height: 48px; padding: 12px 24px'>"
+  ],
+  "strengths": [
+    "<specific positive observation about the UI>"
+  ],
+  "summary": "<2-3 sentence plain-English verdict for a non-designer>",
+  "developerNotes": ["<technical note with CSS/WCAG specifics>"],
+  "designerNotes": ["<visual/aesthetic note about hierarchy, grid, or brand>"]
+}
 
-2. "grades": An object scoring these 6 dimensions (each 0–100):
-   - layout, typography, colorContrast, spacing, accessibility, responsiveness
-
-3. "annotations": An array of issues found on the screenshot. Each annotation:
-   {
-     "id": "issue_1",
-     "zone": "header | hero | nav | form | footer | card | button | general",
-     "severity": "critical | warning | suggestion",
-     "title": "Short issue title",
-     "description": "What the problem is and why it matters",
-     "fix": "Exact, actionable fix with specific values (e.g. change #ccc to #333, add 16px padding)"
-   }
-
-4. "summary": 2–3 sentence plain-English verdict for beginners.
-
-5. "developerNotes": 2–3 technical notes for developers (CSS properties, WCAG rules, etc.).
-
-6. "designerNotes": 2–3 visual/aesthetic notes for designers (grid, hierarchy, visual weight, etc.).
+Rules:
+- overallScore = weighted average: layout(20%) + typography(20%) + color(20%) + hierarchy(25%) + consistency(15%)
+- Scores must be integers 0–100 only
+- topIssues: ${detailLevel} items max, ordered by severity (high → low)
+- quickFixes: one fix per issue, match the order of topIssues
+- strengths: 2–3 genuine positive observations
+- Be specific about screen locations (e.g. "bottom-right CTA", "hero section H1", "nav hamburger icon")
+- Fixes must reference exact values (px sizes, hex colors, ratios)
+- Professional SaaS dashboard standards apply
 
 ─────────────────────────────────────────
-PART 2 — REDESIGNED UI CODE
+PART 2 — REDESIGNED UI CODE (HTML)
 ─────────────────────────────────────────
-After the JSON, output a COMPLETE redesigned version of the uploaded UI as a single self-contained HTML file.
+Output a COMPLETE redesigned version of the uploaded UI as a single self-contained HTML file.
 
-Rules for the redesigned code:
+Rules:
 - Use only HTML + Tailwind CSS (via CDN) + vanilla JS if needed
-- Fix ALL the issues you annotated in Part 1
-- Keep the same page purpose and content — just improve the design
-- Use a clean modern design system: consistent spacing (8pt grid), proper contrast ratios (WCAG AA), clear visual hierarchy
-- Add a top banner inside the page that says: "✨ UI Fixer — Redesigned Version" so users know it's the improved output
-- The HTML must be fully functional and render correctly in a browser with no external dependencies except Tailwind CDN
+- Fix ALL issues listed in topIssues
+- Keep the same page purpose and content — only improve the design
+- Use a clean modern design system: 8pt grid, WCAG AA contrast ratios (4.5:1 text), clear visual hierarchy
+- Add a top banner: "✨ UI Fixer — Redesigned Version"
+- Fully functional in browser with no external deps except Tailwind CDN
 
 ─────────────────────────────────────────
-OUTPUT FORMAT (strictly follow this):
+OUTPUT FORMAT — STRICTLY FOLLOW THIS:
 ─────────────────────────────────────────
-Return your response in this exact structure:
 
 ===JSON_START===
-{ ...the full JSON report object... }
+{ ...full JSON report... }
 ===JSON_END===
 
 ===HTML_START===
 <!DOCTYPE html>
-...full redesigned HTML file...
+...full redesigned HTML...
 ===HTML_END===
 
-Do not add any text or explanation outside these delimiters.`;
+Output NOTHING outside these delimiters. No markdown, no commentary.`;
   }
 
   parseAIResponse(aiResponse, imageId, analysisType) {
@@ -353,18 +374,41 @@ Do not add any text or explanation outside these delimiters.`;
         throw new Error('AI response did not contain valid JSON block');
       }
 
-      const report = JSON.parse(jsonMatch[1].trim());
+      const rawReport = JSON.parse(jsonMatch[1].trim());
       const redesignedHtml = htmlMatch ? htmlMatch[1].trim() : '<html><body>Redesign failed to generate</body></html>';
+
+      // Normalize to new schema — handle both new (categoryScores) and legacy (grades) responses
+      const scores = rawReport.categoryScores || rawReport.grades || {};
+      const report = {
+        overallScore: rawReport.overallScore ?? 0,
+        categoryScores: {
+          layout:       scores.layout       ?? scores.layout       ?? 0,
+          typography:   scores.typography   ?? scores.typography   ?? 0,
+          color:        scores.color        ?? scores.colorContrast ?? 0,
+          hierarchy:    scores.hierarchy    ?? scores.spacing       ?? 0,
+          consistency:  scores.consistency  ?? scores.responsiveness ?? 0,
+        },
+        topIssues:      rawReport.topIssues      ?? this._convertAnnotationsToIssues(rawReport.annotations),
+        quickFixes:     rawReport.quickFixes      ?? this._extractFixesFromAnnotations(rawReport.annotations),
+        strengths:      rawReport.strengths       ?? [],
+        summary:        rawReport.summary         ?? '',
+        developerNotes: rawReport.developerNotes  ?? [],
+        designerNotes:  rawReport.designerNotes   ?? [],
+        // Keep legacy annotations if present for backward compat
+        ...(rawReport.annotations ? { annotations: rawReport.annotations } : {})
+      };
+
+      const confidence = Math.min(99, Math.max(70, report.overallScore));
 
       return {
         id: uuidv4(),
-        imageId: imageId,
-        analysisType: analysisType,
+        imageId,
+        analysisType,
         analyzedAt: new Date().toISOString(),
         processingTime: 2500,
-        confidence: 95,
-        report: report,
-        redesignedHtml: redesignedHtml,
+        confidence,
+        report,
+        redesignedHtml,
         metadata: {
           analysisMethod: 'ai',
           rawResponse: aiResponse
@@ -374,6 +418,46 @@ Do not add any text or explanation outside these delimiters.`;
       console.error('Error parsing AI response:', error);
       throw error;
     }
+  }
+
+  /** Convert legacy annotation array → topIssues format */
+  _convertAnnotationsToIssues(annotations = []) {
+    return annotations.map(a => ({
+      issue:    a.title || a.description || 'Unknown issue',
+      severity: a.severity === 'critical' ? 'high' : a.severity === 'warning' ? 'medium' : 'low',
+      location: a.zone || 'general'
+    }));
+  }
+
+  /** Extract fixes from legacy annotation array */
+  _extractFixesFromAnnotations(annotations = []) {
+    return annotations.map(a => a.fix || a.description || '').filter(Boolean);
+  }
+
+  /** Generate score-appropriate strengths for simulation mode */
+  _generateStrengths(score) {
+    const pool = {
+      high: [
+        'Excellent visual hierarchy with clear content priority',
+        'Consistent spacing rhythm using an 8pt grid system',
+        'Strong color palette with WCAG AA compliant contrast',
+        'Professional typography scale with good readability',
+        'Intuitive navigation structure with clear affordances'
+      ],
+      mid: [
+        'Clean layout with good use of whitespace',
+        'Recognizable UI patterns reduce cognitive load',
+        'Consistent use of brand colors throughout',
+        'Good information density without overwhelming the user'
+      ],
+      low: [
+        'Basic content structure is easy to follow',
+        'Color palette shows intentional design choices'
+      ]
+    };
+    const tier = score >= 80 ? 'high' : score >= 60 ? 'mid' : 'low';
+    const items = pool[tier];
+    return items.slice(0, 2 + Math.floor(Math.random() * 2));
   }
 
   /**
@@ -412,30 +496,46 @@ Do not add any text or explanation outside these delimiters.`;
     const baseScore = analysisType === 'comprehensive' ? 55 : analysisType === 'detailed' ? 65 : 75;
     const randomScore = baseScore + Math.floor(Math.random() * 20); // 55-95 range
     
-    // Generate correlated grades that make sense together
-    const layoutScore = randomScore + Math.floor(Math.random() * 11) - 5;
-    const typographyScore = randomScore + Math.floor(Math.random() * 11) - 5;
-    const colorContrastScore = Math.min(95, Math.max(40, randomScore + Math.floor(Math.random() * 11) - 8)); // Often lower
-    const spacingScore = randomScore + Math.floor(Math.random() * 11) - 5;
-    const accessibilityScore = Math.min(95, Math.max(40, colorContrastScore + Math.floor(Math.random() * 11) - 5)); // Correlated with contrast
-    const responsivenessScore = randomScore + Math.floor(Math.random() * 11) - 3;
+    // Generate correlated scores for new 5-metric schema
+    const clamp = (v) => Math.min(100, Math.max(40, v));
+    const rand  = (n = 10) => Math.floor(Math.random() * n) - Math.floor(n / 2);
     
-    const overallScore = Math.min(100, Math.max(40, randomScore));
+    const layoutScore      = clamp(randomScore + rand());
+    const typographyScore  = clamp(randomScore + rand());
+    const colorScore       = clamp(randomScore + rand(14) - 7); // color often lower
+    const hierarchyScore   = clamp(randomScore + rand());
+    const consistencyScore = clamp(randomScore + rand());
     
+    const overallScore = clamp(
+      Math.round(layoutScore * 0.20 + typographyScore * 0.20 + colorScore * 0.20 + hierarchyScore * 0.25 + consistencyScore * 0.15)
+    );
+    
+    const annotations = this.generateRealisticAnnotations(overallScore, analysisType);
+
+    // Map legacy annotations → new topIssues + quickFixes
+    const topIssues = annotations.map(a => ({
+      issue:    a.title,
+      severity: a.severity === 'critical' ? 'high' : a.severity === 'warning' ? 'medium' : 'low',
+      location: a.zone || 'general'
+    }));
+    const quickFixes = annotations.map(a => a.fix || a.description);
+
     const report = {
-      overallScore: overallScore,
-      grades: {
-        layout: Math.min(100, Math.max(40, layoutScore)),
-        typography: Math.min(100, Math.max(40, typographyScore)),
-        colorContrast: Math.min(100, Math.max(40, colorContrastScore)),
-        spacing: Math.min(100, Math.max(40, spacingScore)),
-        accessibility: Math.min(100, Math.max(40, accessibilityScore)),
-        responsiveness: Math.min(100, Math.max(40, responsivenessScore))
+      overallScore,
+      categoryScores: {
+        layout:      layoutScore,
+        typography:  typographyScore,
+        color:       colorScore,
+        hierarchy:   hierarchyScore,
+        consistency: consistencyScore
       },
-      annotations: this.generateRealisticAnnotations(overallScore, analysisType),
-      summary: this.generateContextualSummary(overallScore, analysisType),
+      topIssues,
+      quickFixes,
+      strengths: this._generateStrengths(overallScore),
+      annotations, // kept for backward compat
+      summary:        this.generateContextualSummary(overallScore, analysisType),
       developerNotes: this.generateDeveloperNotes(overallScore, analysisType),
-      designerNotes: this.generateDesignerNotes(overallScore, analysisType)
+      designerNotes:  this.generateDesignerNotes(overallScore, analysisType)
     };
 
     const dummyHtml = `
